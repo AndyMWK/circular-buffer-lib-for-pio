@@ -40,7 +40,10 @@ void print_queue_data();
 
 int8_t process_RGB(uint8_t mode);
 
-float calculate_vector_distance(circular_queue &q, float x, float y, float z);
+//based on the existing RGB global circular queue objects
+float calculate_vector_distance(float x, float y, float z);
+
+float calculate_avg(circular_queue &q);
 
 //ideal case values of RGB for both warm and cold. Will be the centre point of 
 const float ideal_R_warm = 216;
@@ -50,6 +53,11 @@ const float ideal_B_warm = 71;
 const float ideal_R_cold = 147;
 const float ideal_G_cold = 170;
 const float ideal_B_cold = 148;
+
+
+//set to arbitrary values
+const float range_warm = 130;
+const float range_cool = 130;
 
 void setup() {
   //Begin serial monitor
@@ -162,16 +170,55 @@ void print_queue_data() {
     C.print_elements();
 }
 
-float calculate_vector_distance(circular_queue &q, float x, float y, float z) {
-  //calculate the distance based on the given origin point. 
+float calculate_avg(circular_queue &q) {
+  long sum = 0;
+  for(uint8_t i = 0; i < arr_size; i++) {
+    sum += q.get_index(i);
+  }
+
+  return static_cast<float>(sum)/static_cast<float>(arr_size);
 }
+
+float calculate_vector_distance(float x, float y, float z) {
+  //calculate the distance based on the given origin point. 
+  float R_average = calculate_avg(R);
+  float G_average = calculate_avg(G);
+  float B_average = calculate_avg(B);
+
+  float distance = pow(R_average - x, 2) + pow(G_average - y, 2) + pow(B_average - z, 2);
+
+  return sqrt(distance);
+
+}
+
+
 
 //when processing RGB, turn off APDS interrupt...
 int8_t process_RGB(uint8_t mode) {
-  //based on the mode, check the if the values fall within the indicated sphere...
 
+  //based on the mode, check the if the values fall within the indiphere...
+  
   //return 0 if wrong
 
   //return -1 if error
 
+  if(mode == 1) {
+
+    //returns 1 when the vector distance is within the range
+    //returns 0 when the vector distance is outside the range
+    return calculate_vector_distance(ideal_R_warm, ideal_G_warm, ideal_B_warm) <= range_warm;
+  }
+
+  if(mode == 2) {
+
+    //returns 1 when the vector distance is within the range
+    //returns 0 when the vector distance is outside the range
+    return calculate_vector_distance(ideal_R_cold, ideal_G_cold, ideal_B_cold) <= range_cool;
+  }
+
+  else {
+
+    //returns -1 when there is something wrong. mode can't be anything other than 1 or 2
+    return -1;
+  }
 }

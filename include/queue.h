@@ -36,8 +36,10 @@ class circular_queue {
     void dequeue();
 
     //use for testing and troubleshooting. 
-    int get_front ();
-    int get_rear ();
+    uint16_t get_front ();
+    uint16_t get_rear ();
+
+    uint16_t get_index(uint8_t index);
 
 };
 
@@ -84,10 +86,14 @@ void circular_queue::dequeue() {
 
 
 //functions for retrieving front and rear values. Use for testing. 
-int circular_queue::get_front() {
+uint16_t circular_queue::get_front() {
     return *(queue + ((front + 1) % size));
 }
 
-int circular_queue::get_rear() {
+uint16_t circular_queue::get_rear() {
     return *(queue + (rear % size));
+}
+
+uint16_t circular_queue::get_index(uint8_t index) {
+    return *(queue + index);
 }
