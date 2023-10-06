@@ -16,7 +16,10 @@ uint16_t r = 0, g = 0, b = 0, c = 0;
 
 
 //AILTL & AIHTH
-const uint16_t high_cold = 1800; //850 if the bounds are too strict
+const uint16_t high_clear = 900; //850 if the bounds are too strict
+const uint16_t low_clear = 300;
+
+const uint16_t high_cold = 1800;
 const uint16_t low_cold = 9;
 
 const int interruptPin = 3;
@@ -82,7 +85,7 @@ void setup() {
   apds.enableColorInterrupt();
 
   //doesn't do what it is supposed to do but the sensor doesn't work without it...?
-  apds.setIntLimits(low_cold, high_cold);
+  apds.setIntLimits(low_clear, high_clear);
 
   attachInterrupt(digitalPinToInterrupt(interruptPin), interruptHandler, FALLING);
 }
@@ -90,6 +93,8 @@ void setup() {
 bool isr = false;
 
 uint8_t mode = 1;
+
+//int interrupt_counter = 0;
 void loop() {
 
   //make sure that the sensor is ready to collect data...
@@ -101,17 +106,19 @@ void loop() {
   apds.getColorData(&r, &g, &b, &c);
   // print_RGB_data();
 
+  //calculate the change in clarity to detect whether we are looking at a birght light or not...
+  uint16_t delta_c = c - C.get_rear();
+  
+  //print_queue_data();
+
+  collect_queue_data(R, r);
+  collect_queue_data(G, g);
+  collect_queue_data(B, b);
+  collect_queue_data(C, c);
   
 
   if(isr) {
-    
-    //calculate the change in clarity to detect whether we are looking at a birght light or not...
-    uint16_t delta_c = c - C.get_rear();
-
-    // Serial.print("c : ");
-    // Serial.print(c);
-    // Serial.print("  C rear: ");
-    // Serial.println(C.get_rear());
+  
 
     if(delta_c <= high_cold && delta_c >= low_cold ) {
       Serial.println("1");
@@ -122,14 +129,6 @@ void loop() {
     isr = false;
     apds.clearInterrupt();
   }
-
-  
-  //print_queue_data();
-
-  collect_queue_data(R, r);
-  collect_queue_data(G, g);
-  collect_queue_data(B, b);
-  collect_queue_data(C, c);
   
 
   delay(delayTime);
@@ -151,6 +150,7 @@ void print_RGB_data() {
 
 void interruptHandler() {
   isr = true;
+  //interrupt_counter++;
 }
 
 void collect_queue_data(circular_queue &q, uint16_t &val) {
@@ -202,6 +202,7 @@ int8_t process_RGB(uint8_t mode) {
 
   //return -1 if error
 
+<<<<<<< HEAD
   if(mode == 1) {
 
     //returns 1 when the vector distance is within the range
@@ -222,3 +223,6 @@ int8_t process_RGB(uint8_t mode) {
     return -1;
   }
 }
+=======
+}
+>>>>>>> 2a687e56ec44382062c357f4e856f822abb6b062
