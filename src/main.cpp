@@ -1,228 +1,133 @@
 #include <Wire.h>
+#include <SparkFun_APDS9960.h>
+#include <Adafruit_I2CDevice.h>
 #include <SPI.h>
-#include <Adafruit_APDS9960.h>
-#include <queue.h>
 
-//global sensor variable
-Adafruit_APDS9960 apds;
+// Pins
+#define APDS9960_INT    2  // Needs to be an interrupt pin
+#define LED_PIN         13 // LED for showing interrupt
 
-//global variables to configure the sensor behavior.         
-const uint16_t integrationTime = 20;
-const uint16_t delayTime = 2000;
+// Constants
+#define LIGHT_INT_HIGH  200 // High light level for interrupt
+#define LIGHT_INT_LOW   5   // Low light level for interrupt
 
+// Global variables
+SparkFun_APDS9960 apds = SparkFun_APDS9960();
+uint16_t ambient_light = 0;
+uint16_t red_light = 0;
+uint16_t green_light = 0;
+uint16_t blue_light = 0;
+int isr_flag = 0;
+uint16_t threshold = 0;
 
-//initalize RGBC values
-uint16_t r = 0, g = 0, b = 0, c = 0;
+uint16_t integrationTime = 20;
 
-
-//AILTL & AIHTH
-const uint16_t high_clear = 900; //850 if the bounds are too strict
-const uint16_t low_clear = 300;
-
-const uint16_t high_cold = 1800;
-const uint16_t low_cold = 9;
-
-const int interruptPin = 3;
-
-void interruptHandler();
-
-//the possible amount of 
-const int arr_size = 4;
-
-circular_queue R(arr_size);
-circular_queue G(arr_size);
-circular_queue B(arr_size);
-circular_queue C(arr_size);
-
-//function declarations
-void print_RGB_data();
-
-void collect_queue_data(circular_queue &q, uint16_t &val);
-
-void print_queue_data();
-
-int8_t process_RGB(uint8_t mode);
-
-//based on the existing RGB global circular queue objects
-float calculate_vector_distance(float x, float y, float z);
-
-float calculate_avg(circular_queue &q);
-
-//ideal case values of RGB for both warm and cold. Will be the centre point of 
-const float ideal_R_warm = 216;
-const float ideal_G_warm = 122;
-const float ideal_B_warm = 71;
-
-const float ideal_R_cold = 147;
-const float ideal_G_cold = 170;
-const float ideal_B_cold = 148;
-
-
-//set to arbitrary values
-const float range_warm = 130;
-const float range_cool = 130;
+void interruptRoutine();
 
 void setup() {
-  //Begin serial monitor
+  
+  // Set LED as output
+  pinMode(LED_PIN, OUTPUT);
+  pinMode(APDS9960_INT, INPUT);
+  
+  // Initialize Serial port
   Serial.begin(9600);
-
-  //establish I2C communication
-  Wire.begin();
-
-  //Do not proceed until the sensor is correctly initialized...
-  while(!apds.begin()) {
-      Serial.println("APDS 9960 could not be initalized");
+  Serial.println();
+  Serial.println(F("-------------------------------------"));
+  Serial.println(F("SparkFun APDS-9960 - Light Interrupts"));
+  Serial.println(F("-------------------------------------"));
+  
+  // Initialize interrupt service routine
+  attachInterrupt(0, interruptRoutine, FALLING);
+  
+  // Initialize APDS-9960 (configure I2C and initial values)
+  if ( apds.init() ) {
+    Serial.println(F("APDS-9960 initialization complete"));
+  } else {
+    Serial.println(F("Something went wrong during APDS-9960 init!"));
   }
 
-  //enable the colour sensing feature of the APDS-9960 sensor
-  apds.enableColor(true);
+  
+  
+  // Set high and low interrupt thresholds
+  if ( !apds.setLightIntLowThreshold(LIGHT_INT_LOW) ) {
+    Serial.println(F("Error writing low threshold"));
+  }
+  if ( !apds.setLightIntHighThreshold(LIGHT_INT_HIGH) ) {
+    Serial.println(F("Error writing high threshold"));
+  }
+  
+  // Start running the APDS-9960 light sensor (no interrupts)
+  if ( apds.enableLightSensor(false) ) {
+    Serial.println(F("Light sensor is now running"));
+  } else {
+    Serial.println(F("Something went wrong during light sensor init!"));
+  }
+  
+  // Read high and low interrupt thresholds
+  if ( !apds.getLightIntLowThreshold(threshold) ) {
+    Serial.println(F("Error reading low threshold"));
+  } else {
+    Serial.print(F("Low Threshold: "));
+    Serial.println(threshold);
+  }
+  if ( !apds.getLightIntHighThreshold(threshold) ) {
+    Serial.println(F("Error reading high threshold"));
+  } else {
+    Serial.print(F("High Threshold: "));
+    Serial.println(threshold);
+  }
+  
+  // Enable interrupts
+  if ( !apds.setAmbientLightIntEnable(1) ) {
+    Serial.println(F("Error enabling interrupts"));
+  }
+  
+  // Wait for initialization and calibration to finish
 
-  //change the time the infrared diodes are exposed to light to reduce saturation
-  apds.setADCIntegrationTime(integrationTime);
+  if( !apds.setADCIntegrationTime(integrationTime)) {
+    Serial.println("Integration Time not set...");
+  }
 
-  apds.setADCGain(APDS9960_AGAIN_1X);
-
-  apds.enableColorInterrupt();
-
-  //doesn't do what it is supposed to do but the sensor doesn't work without it...?
-  apds.setIntLimits(low_clear, high_clear);
-
-  attachInterrupt(digitalPinToInterrupt(interruptPin), interruptHandler, FALLING);
+  delay(500);
 }
 
-bool isr = false;
-
-uint8_t mode = 1;
-
-//int interrupt_counter = 0;
 void loop() {
-
-  //make sure that the sensor is ready to collect data...
-  if(!apds.colorDataReady()) {
-      Serial.println("sensor is not ready to read...");
-      return;
-  }
-
-  apds.getColorData(&r, &g, &b, &c);
-  // print_RGB_data();
-
-  //calculate the change in clarity to detect whether we are looking at a birght light or not...
-  uint16_t delta_c = c - C.get_rear();
   
-  //print_queue_data();
-
-  collect_queue_data(R, r);
-  collect_queue_data(G, g);
-  collect_queue_data(B, b);
-  collect_queue_data(C, c);
-  
-
-  if(isr) {
-  
-
-    if(delta_c <= high_cold && delta_c >= low_cold ) {
-      Serial.println("1");
-      
+  // If interrupt occurs, print out the light levels
+  if ( isr_flag == 1 ) {
+    
+    // Read the light levels (ambient, red, green, blue) and print
+    if (  !apds.readAmbientLight(ambient_light) ||
+          !apds.readRedLight(red_light) ||
+          !apds.readGreenLight(green_light) ||
+          !apds.readBlueLight(blue_light) ) {
+      Serial.println("Error reading light values");
+    } else {
+      Serial.print("Interrupt! Ambient: ");
+      Serial.print(ambient_light);
+      Serial.print(" R: ");
+      Serial.print(red_light);
+      Serial.print(" G: ");
+      Serial.print(green_light);
+      Serial.print(" B: ");
+      Serial.println(blue_light);
     }
     
-    //handle Interrupt Flag...
-    isr = false;
-    apds.clearInterrupt();
-  }
-  
-
-  delay(delayTime);
-
-}
-
-
-//function definitions
-void print_RGB_data() {
-    Serial.print("RGB : ");
-    Serial.print(r);
-    Serial.print(", ");
-    Serial.print(g);
-    Serial.print(", ");
-    Serial.print(b);
-    Serial.print("  C = ");
-    Serial.println(c);
-}
-
-void interruptHandler() {
-  isr = true;
-  //interrupt_counter++;
-}
-
-void collect_queue_data(circular_queue &q, uint16_t &val) {
-    q.enqueue(val);
-
-    if(!q.is_full()) {
-
-        return;
+    // Turn on LED for a half a second
+    digitalWrite(LED_PIN, HIGH);
+    delay(500);
+    digitalWrite(LED_PIN, LOW);
+    
+    // Reset flag and clear APDS-9960 interrupt (IMPORTANT!)
+    isr_flag = 0;
+    if ( !apds.clearAmbientLightInt() ) {
+      Serial.println("Error clearing interrupt");
     }
-
-    if(!q.is_empty()) {
-        q.dequeue();
-    }
-}
-
-void print_queue_data() {
-    C.print_elements();
-}
-
-float calculate_avg(circular_queue &q) {
-  long sum = 0;
-  for(uint8_t i = 0; i < arr_size; i++) {
-    sum += q.get_index(i);
-  }
-
-  return static_cast<float>(sum)/static_cast<float>(arr_size);
-}
-
-float calculate_vector_distance(float x, float y, float z) {
-  //calculate the distance based on the given origin point. 
-  float R_average = calculate_avg(R);
-  float G_average = calculate_avg(G);
-  float B_average = calculate_avg(B);
-
-  float distance = pow(R_average - x, 2) + pow(G_average - y, 2) + pow(B_average - z, 2);
-
-  return sqrt(distance);
-
-}
-
-
-
-//when processing RGB, turn off APDS interrupt...
-int8_t process_RGB(uint8_t mode) {
-
-  //based on the mode, check the if the values fall within the indiphere...
-  
-  //return 0 if wrong
-
-  //return -1 if error
-
-<<<<<<< HEAD
-  if(mode == 1) {
-
-    //returns 1 when the vector distance is within the range
-    //returns 0 when the vector distance is outside the range
-    return calculate_vector_distance(ideal_R_warm, ideal_G_warm, ideal_B_warm) <= range_warm;
-  }
-
-  if(mode == 2) {
-
-    //returns 1 when the vector distance is within the range
-    //returns 0 when the vector distance is outside the range
-    return calculate_vector_distance(ideal_R_cold, ideal_G_cold, ideal_B_cold) <= range_cool;
-  }
-
-  else {
-
-    //returns -1 when there is something wrong. mode can't be anything other than 1 or 2
-    return -1;
+    
   }
 }
-=======
+
+void interruptRoutine() {
+  isr_flag = 1;
 }
->>>>>>> 2a687e56ec44382062c357f4e856f822abb6b062
