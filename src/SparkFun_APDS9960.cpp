@@ -2246,4 +2246,6 @@ bool SparkFun_APDS9960::setADCIntegrationTime(uint16_t iTimeMS) {
   if(wireWriteDataByte(APDS9960_ATIME, (uint8_t)temp)) {
     return true;
   }
+  
+  return false;
 }
