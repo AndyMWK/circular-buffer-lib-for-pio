@@ -8,7 +8,7 @@
 
 // Constants
 #define LIGHT_INT_HIGH  200 // High light level for interrupt
-#define LIGHT_INT_LOW   1   // Low light level for interrupt
+#define LIGHT_INT_LOW   0   // Low light level for interrupt
 #define FLOAT_POINT 2
 #define uINT16 1
 #define COLD 1
@@ -27,13 +27,13 @@ uint16_t delayTime = 500;
 
 //ideal case values of RGB for both warm and cold. 
 //Will be the centre point of the acceptable margin 3D sphere. See extra documentation for mathematical explanation.  
-const float ideal_delta_R_warm = 216.0;
-const float ideal_delta_G_warm = 122.0;
-const float ideal_delta_B_warm = 71.0;
+const float ideal_delta_R_warm = 255.0;
+const float ideal_delta_G_warm = 156.0;
+const float ideal_delta_B_warm = 82.0;
 
-const float ideal_delta_R_cold = 147.0;
-const float ideal_delta_G_cold = 170.0;
-const float ideal_delta_B_cold = 148.0;
+const float ideal_delta_R_cold = 170.0;
+const float ideal_delta_G_cold = 216.0;
+const float ideal_delta_B_cold = 182.0;
 
 const float max_dist_cold = 100.0;
 const float max_dist_warm = 100.0;
@@ -78,7 +78,7 @@ float calculate_vector_dist(float x1, float y1, float z1, float x0, float y0, fl
 
 //mode = 1 -> measuring COLD
 //mode = 2 -> measuring WARM
-uint8_t mode = COLD;
+uint8_t mode = WARM;
 
 //data process
 bool is_color_valid(float cold_v_dist, float warm_v_dist);
@@ -144,14 +144,12 @@ void setup() {
     Serial.println("Integration Time not set...");
   }
   
-  if(delayTime <= 250) {
+  while(delayTime < 500) {
     Serial.println("Delay Time is too short. The program will not work as expected...");
   }
 
   // Wait for initialization and calibration to finish
   delay(500);
-
-  delta_R_cold.print_elements_float();
 
 }
 
@@ -178,7 +176,7 @@ void loop() {
     float delta_B_non_ideal = blue_light - calculate_avg(B, arr_size);
 
     if(mode == COLD) {
-      Serial.println(delta_R_non_ideal);
+
       collect_queue_data_float(delta_R_cold, delta_R_non_ideal);
       collect_queue_data_float(delta_G_cold, delta_G_non_ideal);
       collect_queue_data_float(delta_B_cold, delta_B_non_ideal);
@@ -186,8 +184,12 @@ void loop() {
       //mode = WARM;
     }
     else if(mode == WARM) {
+      
+      collect_queue_data_float(delta_R_warm, delta_R_non_ideal);
+      collect_queue_data_float(delta_G_warm, delta_G_non_ideal);
+      collect_queue_data_float(delta_B_warm, delta_B_non_ideal);
 
-      mode = COLD;
+      //mode = COLD;
     }
 
     interruptCounter++;
@@ -195,41 +197,39 @@ void loop() {
     if(interruptCounter >= arr_size) {
       
       //disable apds
-      delta_R_cold.print_elements_float();
-      float delta_R_cold_non_ideal_avg = calculate_avg_delta(delta_R_cold, arr_size);
-      float delta_G_cold_non_ideal_avg = calculate_avg_delta(delta_G_cold, arr_size);
-      float delta_B_cold_non_ideal_avg = calculate_avg_delta(delta_B_cold, arr_size);
+      // float delta_R_cold_non_ideal_avg = calculate_avg_delta(delta_R_cold, arr_size);
+      // float delta_G_cold_non_ideal_avg = calculate_avg_delta(delta_G_cold, arr_size);
+      // float delta_B_cold_non_ideal_avg = calculate_avg_delta(delta_B_cold, arr_size);
 
-      //Serial.println(delta_R_cold_non_ideal_avg);
-      // Serial.println(delta_R_cold_non_ideal_avg);
-      // Serial.println(delta_G_cold_non_ideal_avg);
-      // Serial.println(delta_B_cold_non_ideal_avg);
+      float delta_R_warm_non_ideal_avg = calculate_avg_delta(delta_R_warm, arr_size);
+      float delta_G_warm_non_ideal_avg = calculate_avg_delta(delta_G_warm, arr_size);
+      float delta_B_warm_non_ideal_avg = calculate_avg_delta(delta_B_warm, arr_size);
 
-      // float delta_R_warm_non_ideal_avg = calculate_avg(delta_R_warm, arr_size);
-      // float delta_G_warm_non_ideal_avg = calculate_avg(delta_G_warm, arr_size);
-      // float delta_B_warm_non_ideal_avg = calculate_avg(delta_B_warm, arr_size);
+      // float distance_cold = calculate_vector_dist(
+      //   delta_R_cold_non_ideal_avg, delta_G_cold_non_ideal_avg, delta_B_cold_non_ideal_avg,
+      //   ideal_delta_R_cold, ideal_delta_G_cold, ideal_delta_B_cold);
 
-      float distance_cold = calculate_vector_dist(
-        delta_R_cold_non_ideal_avg, delta_G_cold_non_ideal_avg, delta_B_cold_non_ideal_avg,
-        ideal_delta_R_cold, ideal_delta_G_cold, ideal_delta_B_cold);
+      float distance_warm = calculate_vector_dist(
+        delta_R_warm_non_ideal_avg, delta_G_warm_non_ideal_avg, delta_B_warm_non_ideal_avg,
+        ideal_delta_R_warm, ideal_delta_G_warm, ideal_delta_B_warm);
 
-      // float distance_warm = calculate_vector_dist(
-      //   delta_R_warm_non_ideal_avg, delta_G_warm_non_ideal_avg, delta_B_warm_non_ideal_avg,
-      //   ideal_delta_R_warm, ideal_delta_G_warm, ideal_delta_B_warm);
-
-      if(is_color_valid(distance_cold, 100.0)) {
-        Serial.println("TW: LPT Passed");
+      if(is_color_valid(100.0, distance_warm)) {
+        Serial.print("TW: LPT Passed        ");
+        Serial.print("distance: ");
+        Serial.println(distance_warm);
       }
 
       else {
         Serial.print("Not TW: LPT Failed    ");
         Serial.print("distance: ");
-        Serial.println(distance_cold);
+        Serial.println(distance_warm);
       }
 
       //re-enable sensor
 
       interruptCounter = 0;
+
+      //empty the delta RGB queues
     }
 
     // Reset flag and clear APDS-9960 interrupt (IMPORTANT!)
@@ -245,13 +245,7 @@ void loop() {
     collect_queue_data(G, green_light);
     collect_queue_data(B, blue_light);
   }
-
-  
-
   print_RGB();
-  
-  
-  
 
   delay(delayTime);
 }
@@ -308,7 +302,7 @@ void collect_queue_data_float(circular_queue &q, float val) {
 //something is wrong here...
 float calculate_avg(circular_queue &q, const uint8_t size) {
   float sum = 0;
-  for(int i = 0; i < size; i++) {
+  for(uint8_t i = 0; i < size; i++) {
     sum += q.get_index(i);
   }
 
@@ -317,7 +311,7 @@ float calculate_avg(circular_queue &q, const uint8_t size) {
 
 float calculate_avg_delta(circular_queue &q, const uint8_t size) {
   float sum = 0;
-  for(int i = 0; i < size; i++) {
+  for(uint8_t i = 0; i < size; i++) {
     sum += q.get_index_float(i);
   }
 
@@ -332,5 +326,7 @@ float calculate_vector_dist(float x1, float y1, float z1, float x0, float y0, fl
 }
 
 bool is_color_valid(float cold_v_dist, float warm_v_dist) {
-  return cold_v_dist <= max_dist_cold;
+  // return cold_v_dist <= max_dist_cold;
+
+  return warm_v_dist <= max_dist_warm;
 }

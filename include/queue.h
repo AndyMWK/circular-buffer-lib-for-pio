@@ -61,7 +61,7 @@ class circular_queue {
 
     void print_elements_float();
 
-    float get_index_float(int index);
+    float get_index_float(uint8_t index);
 
 };
 
@@ -134,7 +134,6 @@ void circular_queue::dequeue_float() {
     numEntries--;
 }
 
-
 //functions for retrieving front and rear values. Use for testing. 
 uint16_t circular_queue::get_front() {
     return *(queue + ((front + 1) % size));
@@ -148,15 +147,6 @@ uint16_t circular_queue::get_index(uint8_t index) {
     return *(queue + index);
 }
 
-// float circular_queue::calculate_avg_float() {
-
-//     float sum = 0.0;
-//     for(int i = 0; i < size; i++) {
-//         sum += queue_float[i];
-
-//     }
-// }
-
-float circular_queue::get_index_float(int index) {
+float circular_queue::get_index_float(uint8_t index) {
     return *(queue_float + index);
 }
