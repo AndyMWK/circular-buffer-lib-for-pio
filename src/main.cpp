@@ -165,6 +165,7 @@ void loop() {
         !apds.readBlueLight(blue_light) ) 
   {
     Serial.println("Error reading light values");
+    return;
   }
 
   // If interrupt occurs, process data...
@@ -233,6 +234,7 @@ void loop() {
     isr_flag = false;
     if ( !apds.clearAmbientLightInt() ) {
       Serial.println("Error clearing interrupt");
+      return;
     }
     
   }
