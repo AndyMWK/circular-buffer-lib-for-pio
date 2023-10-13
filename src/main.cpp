@@ -23,7 +23,7 @@ uint16_t red_light = 0, green_light = 0, blue_light = 0;
 volatile bool isr_flag = false;
 uint16_t threshold = 0;
 uint16_t integrationTime = 25;
-uint16_t delayTime = 5000;
+uint16_t delayTime = 100;
 
 //ideal case values of RGB for both warm and cold. 
 //Will be the centre point of the acceptable margin 3D sphere. See extra documentation for mathematical explanation.  
@@ -51,9 +51,16 @@ circular_queue delta_R_warm(arr_size, FLOAT_POINT);
 circular_queue delta_G_warm(arr_size, FLOAT_POINT);
 circular_queue delta_B_warm(arr_size, FLOAT_POINT);
 
-circular_queue R(arr_size, uINT16);
-circular_queue G(arr_size, uINT16);
-circular_queue B(arr_size, uINT16);
+circular_queue R_profile(arr_size, uINT16);
+circular_queue G_profile(arr_size, uINT16);
+circular_queue B_profile(arr_size, uINT16);
+
+circular_queue R_background(arr_size, uINT16);
+circular_queue G_background(arr_size, uINT16);
+circular_queue B_background(arr_size, uINT16);
+
+circular_queue time_profile(arr_size, uINT16);
+circular_queue distance_data(arr_size, FLOAT_POINT);
 
 /*
 ---------------FUNCITON DECLARATIONS---------------
@@ -83,6 +90,16 @@ uint8_t mode = COLD;
 //data process
 bool is_color_valid(float cold_v_dist, float warm_v_dist);
 void print_RGB_distance(float distance_warm, float distance_cold);
+
+/*
+
+--------------Scanning Software--------------
+
+*/
+
+bool initial_scanning();
+
+void read_RGB();
 
 void setup() {
   
@@ -144,61 +161,55 @@ void setup() {
   if( !apds.setADCIntegrationTime(integrationTime)) {
     Serial.println("Integration Time not set...");
   }
-  
-  while(delayTime < 500) {
-    Serial.println("Delay Time is too short. The program will not work as expected...");
-  }
 
   // Wait for initialization and calibration to finish
+
+  
+  
   delay(500);
 
 }
 
 void loop() {
-  
-  
-  // Read the light levels (ambient, red, green, blue)
-  //do not enter this loop when interrupt is handled. 
-  if (  !apds.readAmbientLight(ambient_light) ||
-        !apds.readRedLight(red_light) ||
-        !apds.readGreenLight(green_light) ||
-        !apds.readBlueLight(blue_light) ) 
-  {
-    Serial.println("Error reading light values");
-    return;
-  }
+  int i = 0;
+  read_RGB();
 
   // If interrupt occurs, process data...
   if (isr_flag) {
-    
+    //disable apds
     Serial.println("    Interrupt!    ");
     
-    float delta_R_non_ideal = red_light - calculate_avg(R, arr_size);
-    float delta_G_non_ideal = green_light - calculate_avg(G, arr_size);
-    float delta_B_non_ideal = blue_light - calculate_avg(B, arr_size);
-
-    if(mode == COLD) {
-
-      collect_queue_data_float(delta_R_cold, delta_R_non_ideal);
-      collect_queue_data_float(delta_G_cold, delta_G_non_ideal);
-      collect_queue_data_float(delta_B_cold, delta_B_non_ideal);
-
-      mode = WARM;
+    while(!initial_scanning()) {
+    Serial.println("initial configuration not set...");
     }
-    else if(mode == WARM) {
+
+    float delta_R_non_ideal = red_light - R_profile.get_index(i);
+    float delta_G_non_ideal = green_light - G_profile.get_index(i);
+    float delta_B_non_ideal = blue_light - B_profile.get_index(i);
+
+    
+
+    // if(mode == COLD) {
+
+    //   collect_queue_data_float(delta_R_cold, delta_R_non_ideal);
+    //   collect_queue_data_float(delta_G_cold, delta_G_non_ideal);
+    //   collect_queue_data_float(delta_B_cold, delta_B_non_ideal);
+
+    //   mode = WARM;
+    // }
+    // else if(mode == WARM) {
       
-      collect_queue_data_float(delta_R_warm, delta_R_non_ideal);
-      collect_queue_data_float(delta_G_warm, delta_G_non_ideal);
-      collect_queue_data_float(delta_B_warm, delta_B_non_ideal);
+    //   collect_queue_data_float(delta_R_warm, delta_R_non_ideal);
+    //   collect_queue_data_float(delta_G_warm, delta_G_non_ideal);
+    //   collect_queue_data_float(delta_B_warm, delta_B_non_ideal);
 
-      mode = COLD;
-    }
+    //   mode = COLD;
+    // }
 
     interruptCounter++;
 
     if(interruptCounter >= arr_size*2) {
       
-      //disable apds
       float delta_R_cold_non_ideal_avg = calculate_avg_delta(delta_R_cold, arr_size);
       float delta_G_cold_non_ideal_avg = calculate_avg_delta(delta_G_cold, arr_size);
       float delta_B_cold_non_ideal_avg = calculate_avg_delta(delta_B_cold, arr_size);
@@ -216,16 +227,16 @@ void loop() {
         ideal_delta_R_warm, ideal_delta_G_warm, ideal_delta_B_warm);
 
       if(is_color_valid(distance_cold, distance_warm)) {
-        Serial.print("TW: LPT Passed        ");
+        Serial.print("Passed consistency validation        ");
         print_RGB_distance(distance_warm, distance_cold);
       }
 
       else {
-        Serial.print("Not TW: LPT Failed    ");
+        Serial.print("Failed consistency validation    ");
         print_RGB_distance(distance_warm, distance_cold);
       }
 
-      //re-enable sensor
+      
 
       interruptCounter = 0;
     }
@@ -236,16 +247,17 @@ void loop() {
       Serial.println("Error clearing interrupt");
       return;
     }
-    
+    //re-enable sensor
   }
 
   else if(!isr_flag) {
     interruptCounter = 0;
     mode = COLD;
-    collect_queue_data(R, red_light);
-    collect_queue_data(G, green_light);
-    collect_queue_data(B, blue_light);
+    collect_queue_data(R_background, red_light);
+    collect_queue_data(G_background, green_light);
+    collect_queue_data(B_background, blue_light);
   }
+
   print_RGB();
 
   delay(delayTime);
@@ -258,7 +270,7 @@ void loop() {
 
 
 void interruptRoutine() {
-  isr_flag = true;
+  //isr_flag = true;
 }
 
 void print_RGB() {
@@ -337,4 +349,77 @@ void print_RGB_distance(float distance_warm, float disatnce_cold) {
   Serial.print(distance_warm);
   Serial.print("      ---cold distance: ");
   Serial.println(disatnce_cold);
+}
+
+void read_RGB() {
+
+  /*
+  Read the light levels (ambient, red, green, blue)
+  do not enter this loop when interrupt is handled.
+  */ 
+
+  while (  !apds.readAmbientLight(ambient_light) ||
+        !apds.readRedLight(red_light) ||
+        !apds.readGreenLight(green_light) ||
+        !apds.readBlueLight(blue_light) ) 
+  {
+    Serial.println("Error reading light values");
+  }
+}
+
+uint16_t distance_threshold = 50;
+bool initial_scannig() {
+  
+  bool read = true;
+  
+
+  uint16_t current_R = 0, current_G = 0, current_B = 0;
+
+  apds.readRedLight(current_R);
+  apds.readGreenLight(current_G);
+  apds.readBlueLight(current_B);
+
+  long current_millis = millis();
+
+  long prev_millis = millis();
+
+  collect_queue_data(R_profile, current_R);
+  collect_queue_data(G_profile, current_G);
+  collect_queue_data(B_profile, current_B);
+
+  while(read) {
+
+    read_RGB();
+
+    float vect_dist = calculate_vector_dist(red_light, green_light, blue_light, current_R, current_G, current_B);
+
+    current_millis = millis();
+
+    if(vect_dist >= distance_threshold) {
+      apds.readRedLight(current_R);
+      apds.readGreenLight(current_G);
+      apds.readBlueLight(current_B);
+
+      collect_queue_data(R_profile, current_R);
+      collect_queue_data(G_profile, current_G);
+      collect_queue_data(B_profile, current_B);
+
+      prev_millis = current_millis - prev_millis;
+
+      /*
+      if this value already exists in the list, then read = false. You already recorded this value. Then return true;
+      */
+      //extra funciton to record the new RGB values and prev_millis()
+    }
+    
+    if(current_millis - prev_millis >= 2000) {
+      return false;
+    }
+  }
+  
+
+  
+
+
+
 }
