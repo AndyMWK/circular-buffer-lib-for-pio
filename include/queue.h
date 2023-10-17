@@ -12,11 +12,13 @@ class circular_queue {
     uint16_t* queue;
 
     float* queue_float;
+
+    bool isDyn;
     
 
     public: 
 
-    circular_queue(int s, int mode) :front(0), rear(0), size(s), numEntries(0) {
+    circular_queue(int s, int mode, bool dyn) :front(0), rear(0), size(s), numEntries(0), isDyn(dyn) {
         if(mode == 1) {
             queue = new uint16_t[size];
         
@@ -63,6 +65,14 @@ class circular_queue {
 
     float get_index_float(uint8_t index);
 
-    void empty_queue_float();
+
+    //dynamic array helper functions
+
+    void append_right();
+    void append_right_float();
+
+    bool dupe_present(uint16_t value, uint16_t deviation, bool vectorize);
+    
+    int get_size_dyn ();
 
 };
