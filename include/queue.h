@@ -1,3 +1,8 @@
+#ifndef QUEUE_H
+#define QUEUE_H
+
+
+
 #include <Arduino.h>
 
 //circular buffer/queue implementation.
@@ -5,20 +10,25 @@
 class circular_queue {
     private: 
 
+    //Index references
     int front = 0;
     int rear = 0;
+
+    //queue capacity/size
     int size;
+
+    //current number of entries in the queue
     int numEntries = 0;
+
+    //integer or floating point queue delcarations. 
+    //You can set them to either calculate only integers or floating points
     uint16_t* queue;
-
     float* queue_float;
-
-    bool isDyn;
     
 
     public: 
 
-    circular_queue(int s, int mode, bool dyn) :front(0), rear(0), size(s), numEntries(0), isDyn(dyn) {
+    circular_queue(int s, int mode) :front(0), rear(0), size(s), numEntries(0) {
         if(mode == 1) {
             queue = new uint16_t[size];
         
@@ -66,13 +76,16 @@ class circular_queue {
     float get_index_float(uint8_t index);
 
 
-    //dynamic array helper functions
-
-    void append_right();
-    void append_right_float();
-
     bool dupe_present(uint16_t value, uint16_t deviation, bool vectorize);
-    
-    int get_size_dyn ();
+
+    void collect_queue_data(const uint16_t value);
+
+    void collect_queue_data_float(const float value);
+
+    float calculate_avg(const int size);
+
+    float calculate_avg_float(const int size);
 
 };
+
+#endif

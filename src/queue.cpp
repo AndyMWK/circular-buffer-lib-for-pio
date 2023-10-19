@@ -43,20 +43,12 @@ bool circular_queue::is_full() {
 
 void circular_queue::enqueue(uint16_t value) {
 
-    if(isDyn) {
-        append_right();
-    }
-
     queue[rear] = value;
     rear = (rear + 1) % size;
     numEntries++;
 }
 
 void circular_queue::enqueue_float(float value) {
-
-    if(isDyn) {
-        append_right_float();
-    }
 
     queue_float[rear] = value;
     rear = (rear + 1) % size;
@@ -106,36 +98,6 @@ float circular_queue::get_index_float(uint8_t index) {
     return *(queue_float + index);
 }
 
-void circular_queue::append_right() {
-        if(numEntries >= size) {
-            size *= 2;
-            uint16_t* queue_new = new uint16_t[size];
-
-            for(int i = 0; i < size; i++) {
-                queue_new[i] = queue[i];
-            }
-
-            delete[] queue;
-
-            queue = queue_new;
-        }
-}
-
-void circular_queue::append_right_float() {
-        if(numEntries >= size) {
-            size *= 2;
-            float* queue_float_new = new float[size];
-
-            for(int i = 0; i < size; i++) {
-                queue_float_new[i] = queue_float[i];
-            }
-
-            delete[] queue_float;
-
-            queue_float = queue_float_new;
-        }
-}
-
 bool circular_queue::dupe_present(uint16_t value, uint16_t deviation, bool vectorize = false) {
 
     if(!vectorize) {
@@ -152,8 +114,4 @@ bool circular_queue::dupe_present(uint16_t value, uint16_t deviation, bool vecto
        return false;
     }
     return false;
-}
-
-int circular_queue::get_size_dyn() {
-    return size;
 }
