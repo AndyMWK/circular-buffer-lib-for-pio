@@ -25,8 +25,9 @@
 #define DYNAMIC_FALSE 0
 #define TIME_OUT 150000
 #define MAX_VECT_DIST 100.0
-#define DELAY_TIME 100
-#define SCANNING_POLL_RATE 25
+#define DELAY_TIME 500
+#define SCANNING_POLL_RATE 100
+#define BCKGND_THRESHOLD 140.0
 
 /*
 ---------------GLOBAL VARIABLE DEFINITIONS---------------
@@ -76,6 +77,8 @@ float R_background_avg = 0.0, G_background_avg = 0.0, B_background_avg = 0.0;
 //scanning initialization
 bool initializeation_complete = false;
 bool scan();
+
+void process_scan(float_vect &v, float bckgnd_threshold, float backgnd_avg, float color_threshold);
 
 void setup() {
   
@@ -151,15 +154,29 @@ void loop() {
   read_RGB();
 
   if(isr_flag) {
+
     //disable interrupt
+    // if(!apds.disableLightSensor()) {
+    //   Serial.println("Error disabling light sensor");
+    // }
+
     if(!initializeation_complete) {
       if(!scan()) {
         Serial.println("Scanning sequence did not complete...");
       }
 
-      R_profile.print();
-      G_profile.print();
-      B_profile.print();
+      // R_profile.print();
+      // Serial.println();
+      // G_profile.print();
+      // Serial.println();
+      // B_profile.print();
+      // Serial.println();
+      // time_profile.print();
+      // Serial.println();
+
+      process_scan(R_profile, BCKGND_THRESHOLD, R_background_avg, 20.0);
+      process_scan(G_profile, BCKGND_THRESHOLD, G_background_avg, 20.0);
+      process_scan(B_profile, BCKGND_THRESHOLD, B_background_avg, 20.0);
       
       initializeation_complete = true;
     }
@@ -170,6 +187,14 @@ void loop() {
 
 
     handle_interrupt();
+
+    // if(!apds.setAmbientLightIntEnable(1)) {
+    //   Serial.println("Error enabling interrupt..");
+    // }
+
+    // if(!apds.setMode(AMBIENT_LIGHT, 1)) {
+    //   Serial.println("Error setting mode...");
+    // }
     //enable interrupt
 
   } else {
@@ -182,6 +207,7 @@ void loop() {
     B_background_avg = queue_helper::calculate_avg(B_background, arr_size);
   }
 
+  print_RGB();
   delay(DELAY_TIME);
 }
 
@@ -204,11 +230,11 @@ void handle_interrupt() {
 
 void print_RGB() {
   Serial.print("RGB: ");
-  Serial.print(red_light);
+  Serial.print(R_background_avg);
   Serial.print(", ");
-  Serial.print(green_light);
+  Serial.print(G_background_avg);
   Serial.print(", ");
-  Serial.print(blue_light);
+  Serial.print(B_background_avg);
 
   Serial.print("    C: ");
   Serial.println(ambient_light);
@@ -235,24 +261,35 @@ void read_RGB() {
 
 bool scan() {
 
-  bool read = true;
   long currentMillis = millis();
   long startingMillis = millis();
 
-  while(read) {
+  while(true) {
+
     read_RGB();
-    R_profile.push_back(red_light);
-    G_profile.push_back(green_light);
-    B_profile.push_back(blue_light);
+    
+
+    Serial.print("RGB: ");
+    Serial.print(red_light);
+    Serial.print(", ");
+    Serial.print(green_light);
+    Serial.print(", ");
+    Serial.print(blue_light);
+
+
+    if(initial_scan::end_scan_sequence(R_background_avg, G_background_avg, B_background_avg, 
+                                        red_light, green_light, blue_light, 
+                                        1000, 30, currentMillis - startingMillis)) 
+    {
+      break;
+    }
+
+    R_profile.push_back(red_light*1.0);
+    G_profile.push_back(green_light*1.0);
+    B_profile.push_back(blue_light*1.0);
 
     time_profile.push_back(currentMillis - startingMillis);
     currentMillis = millis();
-
-    if(initial_scan::end_scan_sequence(R_background_avg, G_background_avg, B_background_avg, 
-                                        red_light, green_light, blue_light, 2000, 30, currentMillis)) 
-    {
-      read = false;
-    }
 
     delay(SCANNING_POLL_RATE);
   }
@@ -260,115 +297,11 @@ bool scan() {
   return true;
 }
 
-
-// uint16_t distance_threshold = 50;
-
-// bool dupe_present_vect(circular_queue &qx, circular_queue &qy, circular_queue &qz, 
-//                         float threshold, int array_size, uint16_t x, uint16_t y, uint16_t z) 
-// {
-//   for(int i = 0; i < array_size; i++) {
-//     float vect_dist = calculate_vector_dist(qx.get_index(i), qy.get_index(i), qz.get_index(i), x, y, z);
-
-//     if(vect_dist <= threshold) {
-//       return true;
-//     }
-//   }
-
-//   return false;
-// }
-
-// //need to account for the background
-// bool initial_scanning() {
-  
-//   bool read = true;
-  
-
-//   uint16_t profile_isntance_R = 0, profile_instance_G = 0, profile_istance_B = 0;
-
-//   // float R_back_avg = calculate_avg(R_background, arr_size);
-//   // float G_back_avg = calculate_avg(G_background, arr_size);
-//   // float B_back_avg = calculate_avg(B_background, arr_size);
-
-//   apds.readRedLight(profile_isntance_R);
-//   apds.readGreenLight(profile_instance_G);
-//   apds.readBlueLight(profile_istance_B);
-
-//   collect_queue_data(R_profile, profile_isntance_R);
-//   collect_queue_data(G_profile, profile_instance_G);
-//   collect_queue_data(B_profile, profile_istance_B);
-
-//   long current_millis = millis();
-
-//   long prev_millis = millis();
-
-//   Serial.println("Profile Instance Values...");
-//       Serial.print("R: ");
-//       Serial.print(profile_isntance_R);
-//       Serial.print("  G: ");
-//       Serial.print(profile_instance_G);
-//       Serial.print("  B: ");
-//       Serial.println(profile_istance_B);
-      
-//   while(read) {
-
-//     apds.readRedLight(red_light);
-//     apds.readGreenLight(green_light);
-//     apds.readBlueLight(blue_light);
-
-//     float vect_dist = calculate_vector_dist(red_light, green_light, blue_light, 
-//                                             profile_isntance_R, profile_instance_G, profile_istance_B);
-
-//     current_millis = millis();
-    
-    
-
-//     Serial.println("Actual RGB values...");
-//       Serial.print("R: ");
-//       Serial.print(red_light);
-//       Serial.print("  G: ");
-//       Serial.print(green_light);
-//       Serial.print("  B: ");
-//       Serial.println(blue_light);
-
-//     delay(2000);
-//     if(vect_dist >= 20) {
-//       //update new color information
-//       profile_isntance_R = red_light;
-//       profile_instance_G = green_light;
-//       profile_istance_B = blue_light;
-//       prev_millis = current_millis - prev_millis;
-
-//       //If the newly recorded colour profile already exists in the list, then you already recorded this value. 
-//       //If you already recorded this value, you have captured all the color profiles. 
-//       // if(!dupe_present_vect(R_profile, G_profile, B_profile, distance_threshold, 
-//       //                       R_profile.get_size_dyn(), profile_isntance_R, profile_instance_G, 
-//       //                       profile_istance_B)) 
-//       // {
-
-//         collect_queue_data(R_profile, profile_isntance_R);
-//         collect_queue_data(G_profile, profile_instance_G);
-//         collect_queue_data(B_profile, profile_istance_B);
-//         collect_queue_data_float(time_profile, prev_millis);
-//       //}
-
-//       // else {
-//       //   read = false;
-//       // }
-
-//     }
-
-//     else if(current_millis - prev_millis >= TIME_OUT) {
-//       //the sequence has timed out and you are not getting a new color profile. 
-      
-      
-//       return false;
-//     }
-    
-//   }
-  
-//   return true;
-
-// }
+void process_scan(float_vect &v, float bckgnd_threshold, float bckgnd_avg, float color_threshold) {
+  if(v.remove_values_inside_threshold(bckgnd_avg, bckgnd_threshold)) {
+    v.print();
+  }
+}
 
 
 

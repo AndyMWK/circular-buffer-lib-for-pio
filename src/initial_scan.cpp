@@ -10,9 +10,14 @@ bool initial_scan::end_scan_sequence (const float R_bck_avg, const float G_bck_a
 {
     float RGB_dist = RGB_vector::calculate_vector_dist(R_bck_avg, G_bck_avg, B_bck_avg, R, G, B);
 
-    if(RGB_dist > max_RGB_dist) {
-        return true;
-    } else if(currentMillis > max_time) {
+    Serial.print("          RGB Dist: ");
+    Serial.println(RGB_dist);
+
+    // if(RGB_dist < max_RGB_dist) {
+    //     return true;
+    // } else
+    
+    if(currentMillis > max_time) {
         return true;
     }
 

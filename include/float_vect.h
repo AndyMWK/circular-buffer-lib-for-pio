@@ -1,3 +1,7 @@
+#ifndef FLOAT_VECT_H
+#define FLOAT_VECT_H
+
+
 #include <Arduino.h>
 
 class float_vect {
@@ -7,6 +11,8 @@ class float_vect {
     int size;
     int numEntires;
     
+    bool fit_to_size();
+    bool is_within_percent_treshold(float value1, float value2, float threshold);
 
     public: 
 
@@ -32,7 +38,7 @@ class float_vect {
     }
 
     //printing values
-    void print() const;
+    void print();
 
     //gives size
     int get_size() const;
@@ -46,8 +52,8 @@ class float_vect {
     //makes an entry on the array. Stores new entry at the very end. 
     void push_back(float value);
 
-    //deletes an entry on the array. Removes entry at the very end. 
-    void pop_back();
-    
+    bool remove_values_inside_threshold(float value, float percent_threshold);
 
 };
+
+#endif
