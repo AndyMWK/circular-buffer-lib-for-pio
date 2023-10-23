@@ -114,3 +114,12 @@ bool float_vect::remove_values_inside_threshold(float value, float percent_thres
 
     return true;
 }
+
+void float_vect::reset(int s) {
+    for(int i = 0; i < numEntires; i++) {
+        arr[i] = 0;
+    }
+    size = s;
+
+    numEntires = 0;
+}

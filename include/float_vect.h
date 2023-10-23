@@ -4,6 +4,8 @@
 
 #include <Arduino.h>
 
+#define DEFAULT_SIZE 4
+
 class float_vect {
     private: 
 
@@ -53,6 +55,8 @@ class float_vect {
     void push_back(float value);
 
     bool remove_values_inside_threshold(float value, float percent_threshold);
+
+    void reset(int s = DEFAULT_SIZE);
 
 };
 

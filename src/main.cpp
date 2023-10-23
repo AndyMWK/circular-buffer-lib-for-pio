@@ -15,19 +15,18 @@
 #define APDS9960_INT    2  // Needs to be an interrupt pin
 
 // Constants
-#define LIGHT_INT_HIGH  200 // High light level for interrupt
+#define LIGHT_INT_HIGH  100 // High light level for interrupt
 #define LIGHT_INT_LOW   0   // Low light level for interrupt
 #define FLOAT_POINT 2
 #define uINT16 1
-#define COLD 1
-#define WARM 2
 #define DYNAMIC_TRUE 1
 #define DYNAMIC_FALSE 0
 #define TIME_OUT 150000
 #define MAX_VECT_DIST 100.0
 #define DELAY_TIME 500
-#define SCANNING_POLL_RATE 100
+#define SCANNING_POLL_RATE 75
 #define BCKGND_THRESHOLD 140.0
+#define NUM_OF_COLOUR_PROFILES 2
 
 /*
 ---------------GLOBAL VARIABLE DEFINITIONS---------------
@@ -37,7 +36,7 @@ SparkFun_APDS9960 apds = SparkFun_APDS9960();
 uint16_t ambient_light = 0;
 uint16_t red_light = 0, green_light = 0, blue_light = 0;
 uint16_t threshold = 0;
-uint16_t integrationTime = 25;
+uint16_t integrationTime = 5;
 
 
 //Queue initalization
@@ -78,7 +77,7 @@ float R_background_avg = 0.0, G_background_avg = 0.0, B_background_avg = 0.0;
 bool initializeation_complete = false;
 bool scan();
 
-void process_scan(float_vect &v, float bckgnd_threshold, float backgnd_avg, float color_threshold);
+void process_scan_thresholding(float_vect &v, float bckgnd_threshold, float backgnd_avg, float color_threshold);
 
 void setup() {
   
@@ -89,7 +88,7 @@ void setup() {
   Serial.begin(9600);
   Serial.println();
   Serial.println(F("-------------------------------------"));
-  Serial.println(F("APDS 9960 - Light Sensing"));
+  Serial.println(F("APDS 9960 - Colour Consistency Sensing"));
   Serial.println(F("-------------------------------------"));
   
   // Initialize interrupt service routine
@@ -147,7 +146,7 @@ void setup() {
 
 }
 
-
+bool skipped_start = false;
 
 void loop() {
 
@@ -155,10 +154,11 @@ void loop() {
 
   if(isr_flag) {
 
-    //disable interrupt
-    // if(!apds.disableLightSensor()) {
-    //   Serial.println("Error disabling light sensor");
-    // }
+    if(!skipped_start) {
+        skipped_start = true;
+        delay(1500);
+        return;
+    }
 
     if(!initializeation_complete) {
       if(!scan()) {
@@ -174,11 +174,16 @@ void loop() {
       // time_profile.print();
       // Serial.println();
 
-      process_scan(R_profile, BCKGND_THRESHOLD, R_background_avg, 20.0);
-      process_scan(G_profile, BCKGND_THRESHOLD, G_background_avg, 20.0);
-      process_scan(B_profile, BCKGND_THRESHOLD, B_background_avg, 20.0);
+      process_scan_thresholding(R_profile, BCKGND_THRESHOLD, R_background_avg, 60.0);
+      process_scan_thresholding(G_profile, BCKGND_THRESHOLD, G_background_avg, 60.0);
+      process_scan_thresholding(B_profile, BCKGND_THRESHOLD, B_background_avg, 60.0);
       
-      initializeation_complete = true;
+
+      R_profile.reset(arr_size);
+      G_profile.reset(arr_size);
+      B_profile.reset(arr_size);
+
+      //initializeation_complete = true;
     }
     
 
@@ -187,14 +192,6 @@ void loop() {
 
 
     handle_interrupt();
-
-    // if(!apds.setAmbientLightIntEnable(1)) {
-    //   Serial.println("Error enabling interrupt..");
-    // }
-
-    // if(!apds.setMode(AMBIENT_LIGHT, 1)) {
-    //   Serial.println("Error setting mode...");
-    // }
     //enable interrupt
 
   } else {
@@ -297,7 +294,7 @@ bool scan() {
   return true;
 }
 
-void process_scan(float_vect &v, float bckgnd_threshold, float bckgnd_avg, float color_threshold) {
+void process_scan_thresholding(float_vect &v, float bckgnd_threshold, float bckgnd_avg, float color_threshold) {
   if(v.remove_values_inside_threshold(bckgnd_avg, bckgnd_threshold)) {
     v.print();
   }
