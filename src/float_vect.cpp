@@ -23,6 +23,10 @@ int float_vect::get_size() const {
     return size;
 }
 
+int float_vect::get_numEntry() const {
+    return numEntires;
+}
+
 
 int float_vect::get_entry(int index) const {
 
@@ -116,10 +120,71 @@ bool float_vect::remove_values_inside_threshold(float value, float percent_thres
 }
 
 void float_vect::reset(int s) {
+
+    float* new_arr = new float[numEntires];
+
     for(int i = 0; i < numEntires; i++) {
-        arr[i] = 0;
+        new_arr[i] = 0.0;
     }
-    size = s;
+    size = numEntires;
 
     numEntires = 0;
+    
+    delete[] arr;
+    arr = new_arr;
 }
+
+bool float_vect::extract_values_oustide_threshold(float value, float percent_threshold) {
+    if(fit_to_size()) {
+
+        if(percent_threshold > 200.0) {
+            return false;
+        }
+
+        float* new_arr = new float[size];
+        
+        int new_arr_index = 0;
+        numEntires = 0;
+
+        bool began_recording_sequence = false;
+        
+        int cycles = 0;
+        for(int i = 0; i < size; i++) {
+
+            if(!is_within_percent_treshold(value, arr[i], percent_threshold)) {
+                began_recording_sequence = true;
+                new_arr[new_arr_index] = arr[i];
+                new_arr_index++;
+                numEntires++;
+            } else if(began_recording_sequence) {
+                //check signal frequency to make sure that it isn't a sudden high pulse...
+                if((numEntires > 3)) {
+                    break;
+                }
+                numEntires = 0;
+                new_arr_index = 0;
+            }
+
+            if(i == size) {
+                cycles++;
+                i = 0;
+            }
+            if(cycles >= 2) {
+                break;
+            }
+
+        }
+        delete[] arr;
+        arr = new_arr;
+
+        if(numEntires == 0) {
+            return false;
+        }
+        
+
+    } else {
+        return false;
+    }
+
+    return true;
+} 

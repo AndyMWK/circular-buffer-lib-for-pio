@@ -19,14 +19,14 @@
 #define LIGHT_INT_LOW   0   // Low light level for interrupt
 #define FLOAT_POINT 2
 #define uINT16 1
-#define DYNAMIC_TRUE 1
-#define DYNAMIC_FALSE 0
 #define TIME_OUT 150000
 #define MAX_VECT_DIST 100.0
 #define DELAY_TIME 500
 #define SCANNING_POLL_RATE 75
-#define BCKGND_THRESHOLD 140.0
-#define NUM_OF_COLOUR_PROFILES 2
+#define BCKGND_THRESHOLD 160.0
+#define INCREASING 1
+#define DECREASING -1
+#define STABLE 0
 
 /*
 ---------------GLOBAL VARIABLE DEFINITIONS---------------
@@ -46,6 +46,8 @@ circular_queue delta_R(arr_size, FLOAT_POINT);
 circular_queue delta_G(arr_size, FLOAT_POINT);
 circular_queue delta_B(arr_size, FLOAT_POINT);
 
+
+//PROBLEMATIC
 float_vect R_profile(arr_size);
 float_vect G_profile(arr_size);
 float_vect B_profile (arr_size);
@@ -78,6 +80,7 @@ bool initializeation_complete = false;
 bool scan();
 
 void process_scan_thresholding(float_vect &v, float bckgnd_threshold, float backgnd_avg, float color_threshold);
+void extract_peak(float_vect &v, float bckgnd_threshold, float backgnd_avg);
 
 void setup() {
   
@@ -165,18 +168,10 @@ void loop() {
         Serial.println("Scanning sequence did not complete...");
       }
 
-      // R_profile.print();
-      // Serial.println();
-      // G_profile.print();
-      // Serial.println();
-      // B_profile.print();
-      // Serial.println();
-      // time_profile.print();
-      // Serial.println();
 
-      process_scan_thresholding(R_profile, BCKGND_THRESHOLD, R_background_avg, 60.0);
-      process_scan_thresholding(G_profile, BCKGND_THRESHOLD, G_background_avg, 60.0);
-      process_scan_thresholding(B_profile, BCKGND_THRESHOLD, B_background_avg, 60.0);
+      extract_peak(R_profile, BCKGND_THRESHOLD, R_background_avg);
+      extract_peak(G_profile, BCKGND_THRESHOLD, G_background_avg);
+      extract_peak(B_profile, BCKGND_THRESHOLD, B_background_avg);
       
 
       R_profile.reset(arr_size);
@@ -185,10 +180,6 @@ void loop() {
 
       //initializeation_complete = true;
     }
-    
-
-    //process RGB values
-    //reset initiial scanning once a conclusion has been reached 
 
 
     handle_interrupt();
@@ -204,7 +195,7 @@ void loop() {
     B_background_avg = queue_helper::calculate_avg(B_background, arr_size);
   }
 
-  print_RGB();
+  //print_RGB();
   delay(DELAY_TIME);
 }
 
@@ -266,12 +257,12 @@ bool scan() {
     read_RGB();
     
 
-    Serial.print("RGB: ");
-    Serial.print(red_light);
-    Serial.print(", ");
-    Serial.print(green_light);
-    Serial.print(", ");
-    Serial.print(blue_light);
+    // Serial.print("RGB: ");
+    // Serial.print(red_light);
+    // Serial.print(", ");
+    // Serial.print(green_light);
+    // Serial.print(", ");
+    // Serial.print(blue_light);
 
 
     if(initial_scan::end_scan_sequence(R_background_avg, G_background_avg, B_background_avg, 
@@ -300,5 +291,18 @@ void process_scan_thresholding(float_vect &v, float bckgnd_threshold, float bckg
   }
 }
 
+void extract_peak(float_vect &v, float bckgnd_threshold, float bckgnd_avg) {
+  int max_num_cycles = 10;
+  if(v.extract_values_oustide_threshold(bckgnd_avg, bckgnd_threshold)) {
+    v.print();
+  }
+  int num_cycles = 0;
+  while(!v.extract_values_oustide_threshold(bckgnd_avg, bckgnd_threshold)) {
+    if(num_cycles >= max_num_cycles) {
+      Serial.println("error sensing color values...");
+      break;
+    }
+  }
+}
 
 

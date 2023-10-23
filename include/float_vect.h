@@ -45,6 +45,8 @@ class float_vect {
     //gives size
     int get_size() const;
 
+    int get_numEntry() const;
+
     //gives entry at specific index
     int get_entry(int index) const;
 
@@ -55,6 +57,8 @@ class float_vect {
     void push_back(float value);
 
     bool remove_values_inside_threshold(float value, float percent_threshold);
+
+    bool extract_values_oustide_threshold(float value, float percent_threshold);
 
     void reset(int s = DEFAULT_SIZE);
 
