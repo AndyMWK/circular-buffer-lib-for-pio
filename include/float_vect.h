@@ -62,6 +62,10 @@ class float_vect {
 
     void reset(int s = DEFAULT_SIZE);
 
+    bool divide_into_section(float_vect &indeces);
+
+    void sort_ascending();
+
 };
 
 #endif

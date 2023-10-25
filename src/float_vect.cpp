@@ -82,6 +82,11 @@ bool float_vect::fit_to_size() {
     
 }
 
+//find a better sorting algorithm
+void float_vect::sort_ascending() {
+    
+}
+
 bool float_vect::is_within_percent_treshold(float value1, float value2, float threshold) {
     float percent_diff = abs(value1 - value2)/abs((value1+value2)*0.5)*100.0;
 
@@ -134,6 +139,7 @@ void float_vect::reset(int s) {
     arr = new_arr;
 }
 
+//implement window method
 bool float_vect::extract_values_oustide_threshold(float value, float percent_threshold) {
     if(fit_to_size()) {
 
@@ -148,28 +154,14 @@ bool float_vect::extract_values_oustide_threshold(float value, float percent_thr
 
         bool began_recording_sequence = false;
         
-        int cycles = 0;
         for(int i = 0; i < size; i++) {
 
             if(!is_within_percent_treshold(value, arr[i], percent_threshold)) {
-                began_recording_sequence = true;
                 new_arr[new_arr_index] = arr[i];
                 new_arr_index++;
                 numEntires++;
-            } else if(began_recording_sequence) {
-                //check signal frequency to make sure that it isn't a sudden high pulse...
-                if((numEntires > 3)) {
-                    break;
-                }
-                numEntires = 0;
-                new_arr_index = 0;
-            }
-
-            if(i == size) {
-                cycles++;
-                i = 0;
-            }
-            if(cycles >= 2) {
+                began_recording_sequence = true;
+            }else if(began_recording_sequence) {
                 break;
             }
 
@@ -188,3 +180,38 @@ bool float_vect::extract_values_oustide_threshold(float value, float percent_thr
 
     return true;
 } 
+
+
+bool float_vect::divide_into_section(float_vect &indeces) {
+    if(fit_to_size()) {
+        int index = 0;
+        int new_arr_index = 0;
+        float entry_counter = 0.0;
+        float* new_arr = new float[indeces.get_numEntry() + 1];
+
+        float sum = 0.0;
+        for(int i = 0; i < numEntires; i++) {
+            sum += arr[i];
+            entry_counter++;
+
+            //ISSUE HERE    
+            if(i == (indeces.get_entry(index)) || i == numEntires -1) {
+                new_arr[new_arr_index] = sum/entry_counter;
+                sum = 0; 
+                entry_counter = 0;
+                index++;
+                new_arr_index++;
+            }
+            
+
+        }
+
+        delete[] arr;
+        arr = new_arr;
+        numEntires = new_arr_index;
+    } else {
+        return false;
+    }
+
+    return true;
+}

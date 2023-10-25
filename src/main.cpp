@@ -9,8 +9,6 @@
 
 #include "RGB_vector.h"
 
-#include "initial_scan.h"
-
 //Pins
 #define APDS9960_INT    2  // Needs to be an interrupt pin
 
@@ -19,14 +17,12 @@
 #define LIGHT_INT_LOW   0   // Low light level for interrupt
 #define FLOAT_POINT 2
 #define uINT16 1
-#define TIME_OUT 150000
-#define MAX_VECT_DIST 100.0
-#define DELAY_TIME 500
-#define SCANNING_POLL_RATE 75
-#define BCKGND_THRESHOLD 160.0
-#define INCREASING 1
-#define DECREASING -1
-#define STABLE 0
+#define DELAY_TIME 50
+#define SCANNING_POLL_RATE 50
+#define BCKGND_THRESHOLD 170.0
+#define SCAN_TIME 1000
+#define NUM_PROFILES 2
+
 
 /*
 ---------------GLOBAL VARIABLE DEFINITIONS---------------
@@ -40,24 +36,16 @@ uint16_t integrationTime = 5;
 
 
 //Queue initalization
-const int arr_size = 4;
+const int arr_size = 6;
 
 circular_queue delta_R(arr_size, FLOAT_POINT);
 circular_queue delta_G(arr_size, FLOAT_POINT);
 circular_queue delta_B(arr_size, FLOAT_POINT);
 
-
-//PROBLEMATIC
-float_vect R_profile(arr_size);
-float_vect G_profile(arr_size);
-float_vect B_profile (arr_size);
-
 circular_queue R_background(arr_size, uINT16);
 circular_queue G_background(arr_size, uINT16);
 circular_queue B_background(arr_size, uINT16);
 
-float_vect time_profile(arr_size);
-circular_queue distance_data(arr_size, FLOAT_POINT);
 
 /*
 ---------------FUNCITON DECLARATIONS---------------
@@ -76,11 +64,12 @@ void print_RGB();
 float R_background_avg = 0.0, G_background_avg = 0.0, B_background_avg = 0.0;
 
 //scanning initialization
-bool initializeation_complete = false;
-bool scan();
+bool scan_complete = false;
+bool scan(float_vect &R, float_vect &G, float_vect &B);
 
 void process_scan_thresholding(float_vect &v, float bckgnd_threshold, float backgnd_avg, float color_threshold);
 void extract_peak(float_vect &v, float bckgnd_threshold, float backgnd_avg);
+bool divide_profiles(float_vect &R, float_vect &G, float_vect &B, int size, int &profile_division_index);
 
 void setup() {
   
@@ -155,6 +144,12 @@ void loop() {
 
   read_RGB();
 
+  float_vect R_profile(arr_size);
+  float_vect G_profile(arr_size);
+  float_vect B_profile(arr_size);
+
+  float_vect indeces(arr_size);
+
   if(isr_flag) {
 
     if(!skipped_start) {
@@ -163,27 +158,72 @@ void loop() {
         return;
     }
 
-    if(!initializeation_complete) {
-      if(!scan()) {
-        Serial.println("Scanning sequence did not complete...");
+    if(!scan_complete) {
+
+      int profile_division_counter = 1;
+      int profile_division_index = 0;
+
+      // if(!scan(R_profile, G_profile, B_profile)) {
+      //   Serial.println("Scanning sequence did not complete...");
+      // }
+
+      // Serial.println("----Extracted Array: ----");
+
+      // extract_peak(R_profile, BCKGND_THRESHOLD, R_background_avg);
+      // extract_peak(G_profile, BCKGND_THRESHOLD, G_background_avg);
+      // extract_peak(B_profile, BCKGND_THRESHOLD, B_background_avg);
+
+      // R_profile.reset(6);
+      // G_profile.reset(6);
+      // B_profile.reset(6);
+      
+      R_profile.push_back(34.0);
+      R_profile.push_back(51.0);
+      R_profile.push_back(51.0);
+      R_profile.push_back(51.0);
+      R_profile.push_back(69.0);
+      R_profile.push_back(69.0);
+      R_profile.push_back(54.0);
+
+      G_profile.push_back(40.0);
+      G_profile.push_back(60.0);
+      G_profile.push_back(60.0);
+      G_profile.push_back(60.0);
+      G_profile.push_back(39.0);
+      G_profile.push_back(39.0);
+      G_profile.push_back(31.0);
+
+      B_profile.push_back(34.0);
+      B_profile.push_back(51.0);
+      B_profile.push_back(51.0);
+      B_profile.push_back(51.0);
+      B_profile.push_back(22.0);
+      B_profile.push_back(22.0);
+      B_profile.push_back(17.0);
+
+      //this bit of code only works because we have only 2 color profiles...
+      while(profile_division_counter < NUM_PROFILES) {
+        if(!divide_profiles(R_profile, G_profile, B_profile, R_profile.get_numEntry(), profile_division_index)) {
+          Serial.println("Failed to divide data into separate profiles...");
+        }
+        
+        indeces.push_back(profile_division_index);
+        profile_division_counter++;
       }
 
+      //indeces.print();
+      Serial.println("----Section Array: -----");
+      R_profile.divide_into_section(indeces);
+      G_profile.divide_into_section(indeces);
+      B_profile.divide_into_section(indeces);
 
-      extract_peak(R_profile, BCKGND_THRESHOLD, R_background_avg);
-      extract_peak(G_profile, BCKGND_THRESHOLD, G_background_avg);
-      extract_peak(B_profile, BCKGND_THRESHOLD, B_background_avg);
-      
-
-      R_profile.reset(arr_size);
-      G_profile.reset(arr_size);
-      B_profile.reset(arr_size);
-
-      //initializeation_complete = true;
+      R_profile.print();
+      G_profile.print();
+      B_profile.print();
     }
 
 
     handle_interrupt();
-    //enable interrupt
 
   } else {
     queue_helper::collect_queue_data(R_background, red_light);
@@ -247,36 +287,19 @@ void read_RGB() {
 
 
 
-bool scan() {
+bool scan(float_vect &R, float_vect &G, float_vect &B) {
 
   long currentMillis = millis();
   long startingMillis = millis();
 
-  while(true) {
+  while(currentMillis - startingMillis < SCAN_TIME) {
 
     read_RGB();
-    
 
-    // Serial.print("RGB: ");
-    // Serial.print(red_light);
-    // Serial.print(", ");
-    // Serial.print(green_light);
-    // Serial.print(", ");
-    // Serial.print(blue_light);
+    R.push_back(red_light*1.0);
+    G.push_back(green_light*1.0);
+    B.push_back(blue_light*1.0);
 
-
-    if(initial_scan::end_scan_sequence(R_background_avg, G_background_avg, B_background_avg, 
-                                        red_light, green_light, blue_light, 
-                                        1000, 30, currentMillis - startingMillis)) 
-    {
-      break;
-    }
-
-    R_profile.push_back(red_light*1.0);
-    G_profile.push_back(green_light*1.0);
-    B_profile.push_back(blue_light*1.0);
-
-    time_profile.push_back(currentMillis - startingMillis);
     currentMillis = millis();
 
     delay(SCANNING_POLL_RATE);
@@ -299,10 +322,30 @@ void extract_peak(float_vect &v, float bckgnd_threshold, float bckgnd_avg) {
   int num_cycles = 0;
   while(!v.extract_values_oustide_threshold(bckgnd_avg, bckgnd_threshold)) {
     if(num_cycles >= max_num_cycles) {
-      Serial.println("error sensing color values...");
+      Serial.println("error processing color values...");
       break;
     }
+    num_cycles++;
   }
 }
 
+
+bool divide_profiles(float_vect &R, float_vect &G, float_vect &B, int size, int &profile_division_index) {
+  float max_RGB_dist = 0.0;
+  for(int i = 0; i < size-1; i++) {
+    float RGB_dist = RGB_vector::calculate_vector_dist(R.get_entry(i), G.get_entry(i), B.get_entry(i),
+                                                          R.get_entry(i+1), G.get_entry(i+1), B.get_entry(i+1));
+    if(RGB_dist > max_RGB_dist) {
+      max_RGB_dist = RGB_dist;
+      profile_division_index = i;
+    }
+    
+  } 
+
+  if(max_RGB_dist == 0.0) {
+    return false;
+  } else {
+    return true;
+  }
+}
 
