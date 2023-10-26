@@ -2,11 +2,14 @@
 #include <SparkFun_APDS9960.h>
 #include <SPI.h>
 
+//dependencies to help queue functionality
 #include <queue.h>
 #include "queue_helper.h"
 
-#include <float_vect.h>
+//dynamic float array
+#include "float_vect.h"
 
+//includes Euclidian Space Functions for RGB
 #include "RGB_vector.h"
 
 //Pins
@@ -17,11 +20,12 @@
 #define LIGHT_INT_LOW   0   // Low light level for interrupt
 #define FLOAT_POINT 2
 #define uINT16 1
-#define DELAY_TIME 50
+#define DELAY_TIME 100
 #define SCANNING_POLL_RATE 50
-#define BCKGND_THRESHOLD 170.0
+#define RGB_dist_perct_threshold
 #define SCAN_TIME 1000
 #define NUM_PROFILES 2
+#define RGB_dist_threshold 300
 
 
 /*
@@ -36,15 +40,20 @@ uint16_t integrationTime = 5;
 
 
 //Queue initalization
-const int arr_size = 6;
+const int arr_size = SCAN_TIME/DELAY_TIME;
+const int background_arr_size = 4;
 
-circular_queue delta_R(arr_size, FLOAT_POINT);
-circular_queue delta_G(arr_size, FLOAT_POINT);
-circular_queue delta_B(arr_size, FLOAT_POINT);
+circular_queue R_background(background_arr_size, uINT16);
+circular_queue G_background(background_arr_size, uINT16);
+circular_queue B_background(background_arr_size, uINT16);
 
-circular_queue R_background(arr_size, uINT16);
-circular_queue G_background(arr_size, uINT16);
-circular_queue B_background(arr_size, uINT16);
+circular_queue collected_profile_R(arr_size, FLOAT_POINT);
+circular_queue collected_profile_G(arr_size, FLOAT_POINT);
+circular_queue collected_profile_B(arr_size, FLOAT_POINT);
+
+circular_queue pulse_avg_R(NUM_PROFILES, FLOAT_POINT);
+circular_queue pulse_avg_G(NUM_PROFILES, FLOAT_POINT);
+circular_queue pulse_avg_B(NUM_PROFILES, FLOAT_POINT);
 
 
 /*
@@ -68,9 +77,12 @@ bool scan_complete = false;
 bool scan(float_vect &R, float_vect &G, float_vect &B);
 
 void process_scan_thresholding(float_vect &v, float bckgnd_threshold, float backgnd_avg, float color_threshold);
-void extract_peak(float_vect &v, float bckgnd_threshold, float backgnd_avg);
+
 bool divide_profiles(float_vect &R, float_vect &G, float_vect &B, int size, int &profile_division_index);
 
+void enable_apds();
+
+long startingMillis = 0;
 void setup() {
   
   // Set interrupt pin as input
@@ -86,156 +98,137 @@ void setup() {
   // Initialize interrupt service routine
   attachInterrupt(0, interruptRoutine, FALLING);
   
-  // Initialize APDS-9960 (configure I2C and initial values)
-   if ( apds.init() ) {
-    Serial.println(F("APDS-9960 initialization complete"));
-  } while (!apds.init()) {
-    Serial.println(F("Something went wrong during APDS-9960 init!"));
-  }
+  enable_apds();
 
-  // Set high and low interrupt thresholds
-  while ( !apds.setLightIntLowThreshold(LIGHT_INT_LOW) ) {
-    Serial.println(F("Error writing low threshold"));
-  }
-  while ( !apds.setLightIntHighThreshold(LIGHT_INT_HIGH) ) {
-    Serial.println(F("Error writing high threshold"));
-  }
-  
-  // Start running the APDS-9960 light sensor (no interrupts)
-  if ( apds.enableLightSensor(false) ) {
-    Serial.println(F("Light sensor is now running"));
-  } else {
-    Serial.println(F("Something went wrong during light sensor init!"));
-  }
-  
-  // Read high and low interrupt thresholds
-  if ( !apds.getLightIntLowThreshold(threshold) ) {
-    Serial.println(F("Error reading low threshold"));
-  } else {
-    Serial.print(F("Low Threshold: "));
-    Serial.println(threshold);
-  }
-  if ( !apds.getLightIntHighThreshold(threshold) ) {
-    Serial.println(F("Error reading high threshold"));
-  } else {
-    Serial.print(F("High Threshold: "));
-    Serial.println(threshold);
-  }
-  
-  // Enable interrupts
-  while ( !apds.setAmbientLightIntEnable(1) ) {
-    Serial.println(F("Error enabling interrupts"));
-  }
-  
-  //change the time the diodes are exposed to light. Lower integration time means less sensitivity. 
-  while ( !apds.setADCIntegrationTime(integrationTime)) {
-    Serial.println("Integration Time not set...");
-  }
-
-  // Wait for initialization and calibration to finish
-  
-  delay(DELAY_TIME);
-
+  startingMillis = millis();
+ 
 }
 
 bool skipped_start = false;
+
+bool scan2(float_vect &R, float_vect &G, float_vect &B) {
+
+  long currentMillis = millis();
+  
+
+  if(currentMillis - startingMillis < SCAN_TIME) {
+
+    read_RGB();
+
+    R.push_back(red_light*1.0);
+    G.push_back(green_light*1.0);
+    B.push_back(blue_light*1.0);
+  }
+
+  return true;
+}
+
+int data_collected = 0;
 
 void loop() {
 
   read_RGB();
 
-  float_vect R_profile(arr_size);
-  float_vect G_profile(arr_size);
-  float_vect B_profile(arr_size);
-
-  float_vect indeces(arr_size);
-
   if(isr_flag) {
 
+    handle_interrupt();
+    //apds.disableLightSensor();
+    
     if(!skipped_start) {
         skipped_start = true;
         delay(1500);
         return;
     }
 
-    if(!scan_complete) {
+    //collection state
+    if(data_collected < arr_size) {
+      queue_helper::collect_queue_data_float(collected_profile_R, red_light);
+      queue_helper::collect_queue_data_float(collected_profile_G, green_light);
+      queue_helper::collect_queue_data_float(collected_profile_B, blue_light);
 
-      int profile_division_counter = 1;
-      int profile_division_index = 0;
+      data_collected++;
 
-      // if(!scan(R_profile, G_profile, B_profile)) {
-      //   Serial.println("Scanning sequence did not complete...");
-      // }
+    } 
+    
 
-      // Serial.println("----Extracted Array: ----");
+    //should be at the processing state
+    else if(data_collected == arr_size) {
+      Serial.println("------RGB Array------");
+      collected_profile_R.print_elements_float();
+      collected_profile_G.print_elements_float();
+      collected_profile_B.print_elements_float();
 
-      // extract_peak(R_profile, BCKGND_THRESHOLD, R_background_avg);
-      // extract_peak(G_profile, BCKGND_THRESHOLD, G_background_avg);
-      // extract_peak(B_profile, BCKGND_THRESHOLD, B_background_avg);
+      circular_queue temp_arr_R(arr_size, FLOAT_POINT);
 
-      // R_profile.reset(6);
-      // G_profile.reset(6);
-      // B_profile.reset(6);
+      int mode = 1;
       
-      R_profile.push_back(34.0);
-      R_profile.push_back(51.0);
-      R_profile.push_back(51.0);
-      R_profile.push_back(51.0);
-      R_profile.push_back(69.0);
-      R_profile.push_back(69.0);
-      R_profile.push_back(54.0);
+      float prev_R = 0.0;
+      float prev_G = 0.0;
+      float prev_B = 0.0;
 
-      G_profile.push_back(40.0);
-      G_profile.push_back(60.0);
-      G_profile.push_back(60.0);
-      G_profile.push_back(60.0);
-      G_profile.push_back(39.0);
-      G_profile.push_back(39.0);
-      G_profile.push_back(31.0);
+      for(int i = 0; i < arr_size; i++) {
+        if(mode == 1) {
+          float RGB_dist = RGB_vector::calculate_vector_dist(R_background_avg, G_background_avg, B_background_avg,
+                                                              collected_profile_R.get_index_float(i), 
+                                                              collected_profile_G.get_index_float(i), 
+                                                              collected_profile_B.get_index_float(i));
 
-      B_profile.push_back(34.0);
-      B_profile.push_back(51.0);
-      B_profile.push_back(51.0);
-      B_profile.push_back(51.0);
-      B_profile.push_back(22.0);
-      B_profile.push_back(22.0);
-      B_profile.push_back(17.0);
+          if(!queue_helper::is_within_percent_treshold(RGB_dist, 0.0, 170.0)) {
+            //Serial.println("j");
+            queue_helper::collect_queue_data_float(temp_arr_R, collected_profile_R.get_index_float(i));
+            mode = 2;
+          }
+        }
 
-      //this bit of code only works because we have only 2 color profiles...
-      while(profile_division_counter < NUM_PROFILES) {
-        if(!divide_profiles(R_profile, G_profile, B_profile, R_profile.get_numEntry(), profile_division_index)) {
-          Serial.println("Failed to divide data into separate profiles...");
+        else if(mode == 2) {
+          float RGB_dist = RGB_vector::calculate_vector_dist(prev_R, prev_G, prev_B,
+                                                              collected_profile_R.get_index_float(i), 
+                                                              collected_profile_G.get_index_float(i), 
+                                                              collected_profile_B.get_index_float(i));
+
+          float RGB_dist_from_gnd = RGB_vector::calculate_vector_dist(R_background_avg, G_background_avg, B_background_avg,
+                                                              collected_profile_R.get_index_float(i), 
+                                                              collected_profile_G.get_index_float(i), 
+                                                              collected_profile_B.get_index_float(i));
+
+          if(queue_helper::is_within_percent_treshold(RGB_dist, 0.0, 10.0)) {
+            //Serial.println("h");
+            queue_helper::collect_queue_data_float(temp_arr_R, collected_profile_R.get_index_float(i));
+          } 
+          
+          else if(queue_helper::is_within_percent_treshold(RGB_dist_from_gnd, RGB_dist, 170)) {
+            mode = 1;
+          }
+         
+         //use hash map..?
         }
         
-        indeces.push_back(profile_division_index);
-        profile_division_counter++;
+        
+
+        prev_R = collected_profile_R.get_index_float(i);
+        prev_G = collected_profile_G.get_index_float(i);
+        prev_B = collected_profile_B.get_index_float(i);
       }
-
-      //indeces.print();
-      Serial.println("----Section Array: -----");
-      R_profile.divide_into_section(indeces);
-      G_profile.divide_into_section(indeces);
-      B_profile.divide_into_section(indeces);
-
-      R_profile.print();
-      G_profile.print();
-      B_profile.print();
+      
+      Serial.println("-----temp_r-----");
+      temp_arr_R.print_elements_float();
+      data_collected = 0;
     }
-
-
-    handle_interrupt();
+    
+    //enable_apds();
 
   } else {
     queue_helper::collect_queue_data(R_background, red_light);
     queue_helper::collect_queue_data(G_background, green_light);
     queue_helper::collect_queue_data(B_background, blue_light);
 
-    R_background_avg = queue_helper::calculate_avg(R_background, arr_size);
-    G_background_avg = queue_helper::calculate_avg(G_background, arr_size);
-    B_background_avg = queue_helper::calculate_avg(B_background, arr_size);
+    R_background_avg = queue_helper::calculate_avg(R_background, background_arr_size);
+    G_background_avg = queue_helper::calculate_avg(G_background, background_arr_size);
+    B_background_avg = queue_helper::calculate_avg(B_background, background_arr_size);
+    print_RGB();
   }
 
-  //print_RGB();
+  
   delay(DELAY_TIME);
 }
 
@@ -300,9 +293,19 @@ bool scan(float_vect &R, float_vect &G, float_vect &B) {
     G.push_back(green_light*1.0);
     B.push_back(blue_light*1.0);
 
+    //Serial.println(R.get_numEntry());
     currentMillis = millis();
 
     delay(SCANNING_POLL_RATE);
+  }
+
+  
+
+  if(R.get_numEntry() != G.get_numEntry() || R.get_numEntry() != B.get_numEntry() ||
+      G.get_numEntry() != B.get_numEntry()) 
+  {
+      
+      return false;
   }
 
   return true;
@@ -314,27 +317,13 @@ void process_scan_thresholding(float_vect &v, float bckgnd_threshold, float bckg
   }
 }
 
-void extract_peak(float_vect &v, float bckgnd_threshold, float bckgnd_avg) {
-  int max_num_cycles = 10;
-  if(v.extract_values_oustide_threshold(bckgnd_avg, bckgnd_threshold)) {
-    v.print();
-  }
-  int num_cycles = 0;
-  while(!v.extract_values_oustide_threshold(bckgnd_avg, bckgnd_threshold)) {
-    if(num_cycles >= max_num_cycles) {
-      Serial.println("error processing color values...");
-      break;
-    }
-    num_cycles++;
-  }
-}
-
 
 bool divide_profiles(float_vect &R, float_vect &G, float_vect &B, int size, int &profile_division_index) {
   float max_RGB_dist = 0.0;
   for(int i = 0; i < size-1; i++) {
     float RGB_dist = RGB_vector::calculate_vector_dist(R.get_entry(i), G.get_entry(i), B.get_entry(i),
                                                           R.get_entry(i+1), G.get_entry(i+1), B.get_entry(i+1));
+
     if(RGB_dist > max_RGB_dist) {
       max_RGB_dist = RGB_dist;
       profile_division_index = i;
@@ -349,3 +338,44 @@ bool divide_profiles(float_vect &R, float_vect &G, float_vect &B, int size, int 
   }
 }
 
+void enable_apds() {
+   // Initialize APDS-9960 (configure I2C and initial values)
+   if (!apds.init()) {
+    Serial.println(F("Something went wrong during APDS-9960 init!"));
+  }
+
+  // Set high and low interrupt thresholds
+  while ( !apds.setLightIntLowThreshold(LIGHT_INT_LOW) ) {
+    Serial.println(F("Error writing low threshold"));
+  }
+  while ( !apds.setLightIntHighThreshold(LIGHT_INT_HIGH) ) {
+    Serial.println(F("Error writing high threshold"));
+  }
+  
+  // Start running the APDS-9960 light sensor (no interrupts)
+  if (!apds.enableLightSensor(false) ) {
+    Serial.println(F("Something went wrong during light sensor init!"));
+  }
+  
+  // Read high and low interrupt thresholds
+  if ( !apds.getLightIntLowThreshold(threshold) ) {
+    Serial.println(F("Error reading low threshold"));
+  } 
+  if ( !apds.getLightIntHighThreshold(threshold) ) {
+    Serial.println(F("Error reading high threshold"));
+  } 
+  
+  // Enable interrupts
+  while ( !apds.setAmbientLightIntEnable(1) ) {
+    Serial.println(F("Error enabling interrupts"));
+  }
+  
+  //change the time the diodes are exposed to light. Lower integration time means less sensitivity. 
+  while ( !apds.setADCIntegrationTime(integrationTime)) {
+    Serial.println("Integration Time not set...");
+  }
+
+  // Wait for initialization and calibration to finish
+  
+  delay(DELAY_TIME);
+}

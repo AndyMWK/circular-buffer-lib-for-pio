@@ -139,47 +139,8 @@ void float_vect::reset(int s) {
     arr = new_arr;
 }
 
-//implement window method
-bool float_vect::extract_values_oustide_threshold(float value, float percent_threshold) {
-    if(fit_to_size()) {
 
-        if(percent_threshold > 200.0) {
-            return false;
-        }
 
-        float* new_arr = new float[size];
-        
-        int new_arr_index = 0;
-        numEntires = 0;
-
-        bool began_recording_sequence = false;
-        
-        for(int i = 0; i < size; i++) {
-
-            if(!is_within_percent_treshold(value, arr[i], percent_threshold)) {
-                new_arr[new_arr_index] = arr[i];
-                new_arr_index++;
-                numEntires++;
-                began_recording_sequence = true;
-            }else if(began_recording_sequence) {
-                break;
-            }
-
-        }
-        delete[] arr;
-        arr = new_arr;
-
-        if(numEntires == 0) {
-            return false;
-        }
-        
-
-    } else {
-        return false;
-    }
-
-    return true;
-} 
 
 
 bool float_vect::divide_into_section(float_vect &indeces) {
@@ -214,4 +175,16 @@ bool float_vect::divide_into_section(float_vect &indeces) {
     }
 
     return true;
+}
+
+void float_vect::replace_with_new_array(float_vect &v) {
+
+    float* new_arr = new float[v.get_numEntry()];
+
+    for(int i = 0; i < v.get_numEntry(); i++) {
+        new_arr[i] = v.get_entry(i);
+    }
+
+    delete[] arr;
+    arr = new_arr;
 }

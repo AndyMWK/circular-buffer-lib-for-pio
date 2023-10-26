@@ -13,8 +13,8 @@ class float_vect {
     int size;
     int numEntires;
     
-    bool fit_to_size();
-    bool is_within_percent_treshold(float value1, float value2, float threshold);
+    
+    
 
     public: 
 
@@ -66,6 +66,11 @@ class float_vect {
 
     void sort_ascending();
 
+    bool fit_to_size();
+
+    void replace_with_new_array(float_vect &v);
+
+    bool is_within_percent_treshold(float value1, float value2, float threshold);
 };
 
 #endif

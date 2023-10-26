@@ -8,7 +8,3 @@ float RGB_vector::calculate_vector_dist(float x1, float y1, float z1, float x0, 
 
     return sqrt(dist);
 }
-
-void RGB_vector::print_RGB_distance(float distance) {
-    
-}

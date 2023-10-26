@@ -19,20 +19,27 @@ void circular_queue::print_elements() {
 }
 
 void circular_queue::print_elements_float() {
-    Serial.println("elements in the queue: ");
+    // Serial.println("elements in the queue: ");
+    // for(int i = 0; i < size; i++) {
+
+    //     if(front == i) {
+    //         Serial.print("front-> ");
+    //     }
+
+    //     if(rear == i) {
+    //         Serial.print("rear-> ");
+    //     } 
+    //     Serial.print(i);
+    //     Serial.print(" : ");
+    //     Serial.println(*(queue_float + i));
+    // }
+    
+    Serial.print("( ");
     for(int i = 0; i < size; i++) {
-
-        if(front == i) {
-            Serial.print("front-> ");
-        }
-
-        if(rear == i) {
-            Serial.print("rear-> ");
-        } 
-        Serial.print(i);
-        Serial.print(" : ");
-        Serial.println(*(queue_float + i));
+        Serial.print(*(queue_float+i));
+        Serial.print("  ");
     }
+    Serial.println(")");
 }
 
 
@@ -80,6 +87,13 @@ uint16_t circular_queue::get_rear() {
     return *(queue + (rear % size));
 }
 
+int circular_queue::get_size() const {
+    return size;
+}
+
+int circular_queue::get_numEntry() const {
+    return numEntries;
+}
 uint16_t circular_queue::get_index(uint8_t index) {
 
     if(index < 0 || index > size) {

@@ -69,6 +69,9 @@ class circular_queue {
 
     uint16_t get_index(uint8_t index);
 
+    int get_size() const;
+    int get_numEntry() const;
+
     float calculate_avg_float();
 
     void print_elements_float();
@@ -86,6 +89,7 @@ class circular_queue {
 
     float calculate_avg_float(const int size);
 
+    bool is_within_percent_treshold(float value1, float value2, float threshold);
 };
 
 #endif
