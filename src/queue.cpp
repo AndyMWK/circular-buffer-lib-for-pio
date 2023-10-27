@@ -129,3 +129,13 @@ bool circular_queue::dupe_present(uint16_t value, uint16_t deviation, bool vecto
     }
     return false;
 }
+
+bool circular_queue::set(float value, int index) {
+    if(index < 0 || index >= size) {
+        return false;
+    }
+    
+    queue_float[index] = value;
+
+    return true;
+}

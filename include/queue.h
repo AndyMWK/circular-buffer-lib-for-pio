@@ -90,6 +90,8 @@ class circular_queue {
     float calculate_avg_float(const int size);
 
     bool is_within_percent_treshold(float value1, float value2, float threshold);
+
+    bool set(float value, int index);
 };
 
 #endif

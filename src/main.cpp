@@ -6,9 +6,6 @@
 #include <queue.h>
 #include "queue_helper.h"
 
-//dynamic float array
-#include "float_vect.h"
-
 //includes Euclidian Space Functions for RGB
 #include "RGB_vector.h"
 
@@ -22,10 +19,11 @@
 #define uINT16 1
 #define DELAY_TIME 100
 #define SCANNING_POLL_RATE 50
-#define RGB_dist_perct_threshold
+#define BCKGND_THRESH 180
 #define SCAN_TIME 1000
 #define NUM_PROFILES 2
-#define RGB_dist_threshold 300
+#define SAMPLE_SIZE 5
+
 
 
 /*
@@ -41,7 +39,8 @@ uint16_t integrationTime = 5;
 
 //Queue initalization
 const int arr_size = SCAN_TIME/DELAY_TIME;
-const int background_arr_size = 4;
+const int background_arr_size = 6;
+const float origin_x = 0.0, origin_y = 0.0, origin_z = 0;
 
 circular_queue R_background(background_arr_size, uINT16);
 circular_queue G_background(background_arr_size, uINT16);
@@ -51,9 +50,9 @@ circular_queue collected_profile_R(arr_size, FLOAT_POINT);
 circular_queue collected_profile_G(arr_size, FLOAT_POINT);
 circular_queue collected_profile_B(arr_size, FLOAT_POINT);
 
-circular_queue pulse_avg_R(NUM_PROFILES, FLOAT_POINT);
-circular_queue pulse_avg_G(NUM_PROFILES, FLOAT_POINT);
-circular_queue pulse_avg_B(NUM_PROFILES, FLOAT_POINT);
+circular_queue pulse_avg_R(SAMPLE_SIZE, FLOAT_POINT);
+circular_queue pulse_avg_G(SAMPLE_SIZE, FLOAT_POINT);
+circular_queue pulse_avg_B(SAMPLE_SIZE, FLOAT_POINT);
 
 
 /*
@@ -74,15 +73,12 @@ float R_background_avg = 0.0, G_background_avg = 0.0, B_background_avg = 0.0;
 
 //scanning initialization
 bool scan_complete = false;
-bool scan(float_vect &R, float_vect &G, float_vect &B);
-
-void process_scan_thresholding(float_vect &v, float bckgnd_threshold, float backgnd_avg, float color_threshold);
-
-bool divide_profiles(float_vect &R, float_vect &G, float_vect &B, int size, int &profile_division_index);
 
 void enable_apds();
 
-long startingMillis = 0;
+float calculate_std(float* arr, int size);
+bool RGB_consistent(float max_std);
+
 void setup() {
   
   // Set interrupt pin as input
@@ -99,37 +95,28 @@ void setup() {
   attachInterrupt(0, interruptRoutine, FALLING);
   
   enable_apds();
-
-  startingMillis = millis();
- 
 }
 
 bool skipped_start = false;
-
-bool scan2(float_vect &R, float_vect &G, float_vect &B) {
-
-  long currentMillis = millis();
-  
-
-  if(currentMillis - startingMillis < SCAN_TIME) {
-
-    read_RGB();
-
-    R.push_back(red_light*1.0);
-    G.push_back(green_light*1.0);
-    B.push_back(blue_light*1.0);
-  }
-
-  return true;
-}
-
+bool process_data = false;
 int data_collected = 0;
+int pulse_avg_processed = 0;
 
 void loop() {
 
   read_RGB();
+  if(!isr_flag) {
+    queue_helper::collect_queue_data(R_background, red_light);
+    queue_helper::collect_queue_data(G_background, green_light);
+    queue_helper::collect_queue_data(B_background, blue_light);
 
-  if(isr_flag) {
+    R_background_avg = queue_helper::calculate_avg(R_background, background_arr_size);
+    G_background_avg = queue_helper::calculate_avg(G_background, background_arr_size);
+    B_background_avg = queue_helper::calculate_avg(B_background, background_arr_size);
+    print_RGB();
+  }
+
+  else if(isr_flag) {
 
     handle_interrupt();
     //apds.disableLightSensor();
@@ -150,85 +137,80 @@ void loop() {
 
     } 
     
-
     //should be at the processing state
     else if(data_collected == arr_size) {
       Serial.println("------RGB Array------");
+
       collected_profile_R.print_elements_float();
       collected_profile_G.print_elements_float();
       collected_profile_B.print_elements_float();
-
-      circular_queue temp_arr_R(arr_size, FLOAT_POINT);
-
-      int mode = 1;
       
-      float prev_R = 0.0;
-      float prev_G = 0.0;
-      float prev_B = 0.0;
+      float prev_R = collected_profile_R.get_index_float(0);
+      
+      float total_sum_R = 0;
+      float total_sum_G = 0;
+      float total_sum_B = 0;
+
+      int how_many_collected = 0;
 
       for(int i = 0; i < arr_size; i++) {
-        if(mode == 1) {
-          float RGB_dist = RGB_vector::calculate_vector_dist(R_background_avg, G_background_avg, B_background_avg,
-                                                              collected_profile_R.get_index_float(i), 
-                                                              collected_profile_G.get_index_float(i), 
-                                                              collected_profile_B.get_index_float(i));
 
-          if(!queue_helper::is_within_percent_treshold(RGB_dist, 0.0, 170.0)) {
-            //Serial.println("j");
-            queue_helper::collect_queue_data_float(temp_arr_R, collected_profile_R.get_index_float(i));
-            mode = 2;
-          }
-        }
-
-        else if(mode == 2) {
-          float RGB_dist = RGB_vector::calculate_vector_dist(prev_R, prev_G, prev_B,
-                                                              collected_profile_R.get_index_float(i), 
-                                                              collected_profile_G.get_index_float(i), 
-                                                              collected_profile_B.get_index_float(i));
-
-          float RGB_dist_from_gnd = RGB_vector::calculate_vector_dist(R_background_avg, G_background_avg, B_background_avg,
-                                                              collected_profile_R.get_index_float(i), 
-                                                              collected_profile_G.get_index_float(i), 
-                                                              collected_profile_B.get_index_float(i));
-
-          if(queue_helper::is_within_percent_treshold(RGB_dist, 0.0, 10.0)) {
-            //Serial.println("h");
-            queue_helper::collect_queue_data_float(temp_arr_R, collected_profile_R.get_index_float(i));
-          } 
+          prev_R = collected_profile_R.get_index_float(i);
+        
+          if(queue_helper::is_within_percent_treshold(collected_profile_R.get_index_float(i), R_background_avg, 170)) {
           
-          else if(queue_helper::is_within_percent_treshold(RGB_dist_from_gnd, RGB_dist, 170)) {
-            mode = 1;
+            continue;
           }
-         
-         //use hash map..?
-        }
-        
-        
 
-        prev_R = collected_profile_R.get_index_float(i);
-        prev_G = collected_profile_G.get_index_float(i);
-        prev_B = collected_profile_B.get_index_float(i);
+          if(queue_helper::is_within_percent_treshold(collected_profile_R.get_index_float(i), prev_R, 50.0)) {
+          
+            total_sum_R += collected_profile_R.get_index_float(i);
+            total_sum_G += collected_profile_G.get_index_float(i);
+            total_sum_B += collected_profile_B.get_index_float(i);
+
+            how_many_collected++;
+          }
       }
-      
-      Serial.println("-----temp_r-----");
-      temp_arr_R.print_elements_float();
+      Serial.println("----Collected Averages----");
+      Serial.print("R: ");
+      Serial.print(total_sum_R);
+      Serial.print("  G: ");
+      Serial.print(total_sum_G);
+      Serial.print("  B: ");
+      Serial.println(total_sum_B);
+
+      queue_helper::collect_queue_data_float(pulse_avg_R, total_sum_R/how_many_collected);
+      queue_helper::collect_queue_data_float(pulse_avg_G, total_sum_G/how_many_collected);
+      queue_helper::collect_queue_data_float(pulse_avg_B, total_sum_B/how_many_collected);
+
+      pulse_avg_processed++;
       data_collected = 0;
     }
     
-    //enable_apds();
+    if(pulse_avg_processed == SAMPLE_SIZE) {
+      Serial.println("---Pulse Average---");
+      pulse_avg_R.print_elements_float();
+      pulse_avg_G.print_elements_float();
+      pulse_avg_B.print_elements_float();
+      process_data = true;
+    }
+    
+    if(process_data) {
+      //disable apds
+      if(RGB_consistent(30.0)) {
+        Serial.println("Test Ended...");
+        process_data = false;
+        pulse_avg_processed = 0;
+        data_collected  = 0;
+      }
+      //reset array...
+      //enable apds
 
-  } else {
-    queue_helper::collect_queue_data(R_background, red_light);
-    queue_helper::collect_queue_data(G_background, green_light);
-    queue_helper::collect_queue_data(B_background, blue_light);
+      delay(DELAY_TIME * 10);
+    }
 
-    R_background_avg = queue_helper::calculate_avg(R_background, background_arr_size);
-    G_background_avg = queue_helper::calculate_avg(G_background, background_arr_size);
-    B_background_avg = queue_helper::calculate_avg(B_background, background_arr_size);
-    print_RGB();
+    
   }
-
-  
   delay(DELAY_TIME);
 }
 
@@ -278,64 +260,38 @@ void read_RGB() {
 
 }
 
+float calculate_std(float* arr, int size) {
+  float sum = 0.0;
+  for(int i = 0; i < size; i++) {
+    Serial.println(arr[i]);
+    sum += arr[i];
+  }
+  float avg = sum/(size*1.0);
 
-
-bool scan(float_vect &R, float_vect &G, float_vect &B) {
-
-  long currentMillis = millis();
-  long startingMillis = millis();
-
-  while(currentMillis - startingMillis < SCAN_TIME) {
-
-    read_RGB();
-
-    R.push_back(red_light*1.0);
-    G.push_back(green_light*1.0);
-    B.push_back(blue_light*1.0);
-
-    //Serial.println(R.get_numEntry());
-    currentMillis = millis();
-
-    delay(SCANNING_POLL_RATE);
+  float top = 0.0;
+  for(int i = 0; i < size; i++) {
+    top += pow(arr[i] - avg, 2);
   }
 
-  
+  return sqrt(top/(size - 1)*1.0);
+}
 
-  if(R.get_numEntry() != G.get_numEntry() || R.get_numEntry() != B.get_numEntry() ||
-      G.get_numEntry() != B.get_numEntry()) 
-  {
-      
-      return false;
+bool RGB_consistent(float max_std) {
+
+  float* arr = new float[SAMPLE_SIZE];
+
+  for(int i = 0; i < SAMPLE_SIZE; i++) {
+    arr[i] = RGB_vector::calculate_vector_dist(pulse_avg_R.get_index_float(i), pulse_avg_G.get_index_float(i), 
+                                                pulse_avg_B.get_index_float(i), origin_x, origin_y, origin_z);
   }
 
+  float std = calculate_std(arr, SAMPLE_SIZE);
+
+  Serial.print("STD: ");
+  Serial.println(std);
+
+  delete[] arr;
   return true;
-}
-
-void process_scan_thresholding(float_vect &v, float bckgnd_threshold, float bckgnd_avg, float color_threshold) {
-  if(v.remove_values_inside_threshold(bckgnd_avg, bckgnd_threshold)) {
-    v.print();
-  }
-}
-
-
-bool divide_profiles(float_vect &R, float_vect &G, float_vect &B, int size, int &profile_division_index) {
-  float max_RGB_dist = 0.0;
-  for(int i = 0; i < size-1; i++) {
-    float RGB_dist = RGB_vector::calculate_vector_dist(R.get_entry(i), G.get_entry(i), B.get_entry(i),
-                                                          R.get_entry(i+1), G.get_entry(i+1), B.get_entry(i+1));
-
-    if(RGB_dist > max_RGB_dist) {
-      max_RGB_dist = RGB_dist;
-      profile_division_index = i;
-    }
-    
-  } 
-
-  if(max_RGB_dist == 0.0) {
-    return false;
-  } else {
-    return true;
-  }
 }
 
 void enable_apds() {
@@ -377,5 +333,5 @@ void enable_apds() {
 
   // Wait for initialization and calibration to finish
   
-  delay(DELAY_TIME);
+  delay(DELAY_TIME*10);
 }

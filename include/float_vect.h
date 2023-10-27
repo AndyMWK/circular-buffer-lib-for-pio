@@ -71,6 +71,8 @@ class float_vect {
     void replace_with_new_array(float_vect &v);
 
     bool is_within_percent_treshold(float value1, float value2, float threshold);
+
+    
 };
 
 #endif
