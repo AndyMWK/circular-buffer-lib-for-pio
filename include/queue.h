@@ -78,7 +78,6 @@ class circular_queue {
 
     float get_index_float(uint8_t index);
 
-
     bool dupe_present(uint16_t value, uint16_t deviation, bool vectorize);
 
     void collect_queue_data(const uint16_t value);
@@ -92,6 +91,8 @@ class circular_queue {
     bool is_within_percent_treshold(float value1, float value2, float threshold);
 
     bool set(float value, int index);
+
+    void reset();
 };
 
 #endif

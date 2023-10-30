@@ -79,6 +79,8 @@ void enable_apds();
 float calculate_std(float* arr, int size);
 bool RGB_consistent(float max_std);
 
+bool process_pulse_avg();
+
 void setup() {
   
   // Set interrupt pin as input
@@ -119,7 +121,6 @@ void loop() {
   else if(isr_flag) {
 
     handle_interrupt();
-    //apds.disableLightSensor();
     
     if(!skipped_start) {
         skipped_start = true;
@@ -137,7 +138,7 @@ void loop() {
 
     } 
     
-    //should be at the processing state
+    //preprocessing state
     else if(data_collected == arr_size) {
       Serial.println("------RGB Array------");
 
@@ -145,48 +146,20 @@ void loop() {
       collected_profile_G.print_elements_float();
       collected_profile_B.print_elements_float();
       
-      float prev_R = collected_profile_R.get_index_float(0);
-      
-      float total_sum_R = 0;
-      float total_sum_G = 0;
-      float total_sum_B = 0;
-
-      int how_many_collected = 0;
-
-      for(int i = 0; i < arr_size; i++) {
-
-          prev_R = collected_profile_R.get_index_float(i);
+      if(process_pulse_avg()) {
+        pulse_avg_processed++;
         
-          if(queue_helper::is_within_percent_treshold(collected_profile_R.get_index_float(i), R_background_avg, 170)) {
-          
-            continue;
-          }
-
-          if(queue_helper::is_within_percent_treshold(collected_profile_R.get_index_float(i), prev_R, 50.0)) {
-          
-            total_sum_R += collected_profile_R.get_index_float(i);
-            total_sum_G += collected_profile_G.get_index_float(i);
-            total_sum_B += collected_profile_B.get_index_float(i);
-
-            how_many_collected++;
-          }
       }
-      Serial.println("----Collected Averages----");
-      Serial.print("R: ");
-      Serial.print(total_sum_R);
-      Serial.print("  G: ");
-      Serial.print(total_sum_G);
-      Serial.print("  B: ");
-      Serial.println(total_sum_B);
 
-      queue_helper::collect_queue_data_float(pulse_avg_R, total_sum_R/how_many_collected);
-      queue_helper::collect_queue_data_float(pulse_avg_G, total_sum_G/how_many_collected);
-      queue_helper::collect_queue_data_float(pulse_avg_B, total_sum_B/how_many_collected);
-
-      pulse_avg_processed++;
+      //transition to collection state
       data_collected = 0;
+      collected_profile_R.reset();
+      collected_profile_G.reset();
+      collected_profile_B.reset();
+     
     }
     
+    //transition to processing state
     if(pulse_avg_processed == SAMPLE_SIZE) {
       Serial.println("---Pulse Average---");
       pulse_avg_R.print_elements_float();
@@ -195,6 +168,7 @@ void loop() {
       process_data = true;
     }
     
+    //processing state
     if(process_data) {
       //disable apds
       if(RGB_consistent(30.0)) {
@@ -202,9 +176,12 @@ void loop() {
         process_data = false;
         pulse_avg_processed = 0;
         data_collected  = 0;
+
+        pulse_avg_R.reset();
+        pulse_avg_G.reset();
+        pulse_avg_B.reset();
+        //reset array...
       }
-      //reset array...
-      //enable apds
 
       delay(DELAY_TIME * 10);
     }
@@ -262,7 +239,9 @@ void read_RGB() {
 
 float calculate_std(float* arr, int size) {
   float sum = 0.0;
+  Serial.println("----RGB Distance----");
   for(int i = 0; i < size; i++) {
+    Serial.print("Avg dist: ");
     Serial.println(arr[i]);
     sum += arr[i];
   }
@@ -292,6 +271,58 @@ bool RGB_consistent(float max_std) {
 
   delete[] arr;
   return true;
+}
+
+bool process_pulse_avg() {
+
+  float prev_R = collected_profile_R.get_index_float(0);
+      
+  float total_sum_R = 0;
+  float total_sum_G = 0;
+  float total_sum_B = 0;
+
+  int how_many_collected = 0;
+
+  for(int i = 0; i < arr_size; i++) {
+
+          prev_R = collected_profile_R.get_index_float(i);
+        
+          if(queue_helper::is_within_percent_treshold(collected_profile_R.get_index_float(i), R_background_avg, 120)) {
+          
+            continue;
+          }
+
+          if(queue_helper::is_within_percent_treshold(collected_profile_R.get_index_float(i), prev_R, 50.0)) {
+          
+            total_sum_R += collected_profile_R.get_index_float(i);
+            total_sum_G += collected_profile_G.get_index_float(i);
+            total_sum_B += collected_profile_B.get_index_float(i);
+
+            how_many_collected++;
+          }
+    }
+
+    Serial.println("----Collected Sum----");
+    Serial.print("R: ");
+    Serial.print(total_sum_R);
+    Serial.print("  G: ");
+    Serial.print(total_sum_G);
+    Serial.print("  B: ");
+    Serial.println(total_sum_B);
+
+    Serial.println("----# of collected data points----");
+    Serial.print("#: ");
+    Serial.println(how_many_collected);
+
+    if(how_many_collected == 0) {
+      return false;
+    }
+
+    queue_helper::collect_queue_data_float(pulse_avg_R, total_sum_R/how_many_collected);
+    queue_helper::collect_queue_data_float(pulse_avg_G, total_sum_G/how_many_collected);
+    queue_helper::collect_queue_data_float(pulse_avg_B, total_sum_B/how_many_collected);
+
+    return true;
 }
 
 void enable_apds() {
@@ -332,6 +363,5 @@ void enable_apds() {
   }
 
   // Wait for initialization and calibration to finish
-  
   delay(DELAY_TIME*10);
 }

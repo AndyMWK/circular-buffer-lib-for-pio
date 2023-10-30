@@ -139,3 +139,12 @@ bool circular_queue::set(float value, int index) {
 
     return true;
 }
+
+void circular_queue::reset() {
+    for(int i = 0; i < size; i++) {
+        queue_float[i] = 0;
+    }
+
+    numEntries = 0;
+    rear = 0, front = 0;
+}
