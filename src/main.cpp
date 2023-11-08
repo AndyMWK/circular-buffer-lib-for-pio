@@ -23,7 +23,7 @@
 #define SCAN_TIME 1000
 #define MAX_NUM_COLOR 2
 #define NUM_PROFILES 2
-#define SAMPLE_SIZE 5
+#define SAMPLE_SIZE 7
 
 
 
@@ -152,7 +152,7 @@ void loop() {
       collected_profile_B.print_elements_float();
       
       //additional function for preprocessing the amount of different colors in the array
-      num_colors = differentiate_colors_preprocess(25);
+      num_colors = differentiate_colors_preprocess(23.5);
 
       if(pulse_avg_processed == 0) {
         num_colors_prev = num_colors;
@@ -322,7 +322,8 @@ bool process_pulse_avg() {
 
           prev_R = collected_profile_R.get_index_float(i);
         
-          if(queue_helper::is_within_percent_treshold(collected_profile_R.get_index_float(i), R_background_avg, 120)) {
+          if(queue_helper::is_within_percent_treshold(
+            collected_profile_R.get_index_float(i), R_background_avg, 120)) {
           
             continue;
           }
