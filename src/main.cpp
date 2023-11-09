@@ -23,7 +23,7 @@
 #define SCAN_TIME 250
 #define MAX_NUM_COLOR 2
 #define NUM_PROFILES 2
-#define SAMPLE_SIZE 3
+#define SAMPLE_SIZE 2
 
 
 
@@ -129,7 +129,7 @@ void loop() {
     
     if(!skipped_start) {
         skipped_start = true;
-        delay(1500);
+        delay(1100);
         return;
     }
 
