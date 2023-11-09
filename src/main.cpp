@@ -17,13 +17,13 @@
 #define LIGHT_INT_LOW   0   // Low light level for interrupt
 #define FLOAT_POINT 2
 #define uINT16 1
-#define DELAY_TIME 100
+#define DELAY_TIME 50
 #define SCANNING_POLL_RATE 50
 #define BCKGND_THRESH 180
-#define SCAN_TIME 1000
+#define SCAN_TIME 250
 #define MAX_NUM_COLOR 2
 #define NUM_PROFILES 2
-#define SAMPLE_SIZE 7
+#define SAMPLE_SIZE 3
 
 
 
@@ -214,11 +214,8 @@ void loop() {
         num_color_changes = 0;
         num_colors_prev = 0;
         num_colors = 0;
-        //reset array...
       }
 
-      
-      delay(DELAY_TIME * 10);
     }
 
     
