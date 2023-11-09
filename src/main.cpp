@@ -17,13 +17,13 @@
 #define LIGHT_INT_LOW   0   // Low light level for interrupt
 #define FLOAT_POINT 2
 #define uINT16 1
-#define DELAY_TIME 50
+#define DELAY_TIME 65 //most accurate combo is delay_time = 75ms and SCAN_TIME = 450
 #define SCANNING_POLL_RATE 50
 #define BCKGND_THRESH 180
-#define SCAN_TIME 250
+#define SCAN_TIME 325
 #define MAX_NUM_COLOR 2
 #define NUM_PROFILES 2
-#define SAMPLE_SIZE 2
+#define SAMPLE_SIZE 3
 
 
 
