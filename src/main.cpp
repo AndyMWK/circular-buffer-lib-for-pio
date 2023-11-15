@@ -6,13 +6,19 @@
 #include <queue.h>
 #include "queue_helper.h"
 
-//includes Euclidian Space Functions for RGB
+//includes Euclidian Color Space Functions for RGB
 #include "RGB_vector.h"
 
 //Pins
 #define APDS9960_INT    2  // Needs to be an interrupt pin
 
 // Constants
+
+/*
+DELAY_TIME and SCAN_TIME will determine the speed and accuracy of the program. 
+
+START OFF BY ADJUSTING THESE VALUES ONLY
+*/
 #define LIGHT_INT_HIGH  100 // High light level for interrupt
 #define LIGHT_INT_LOW   0   // Low light level for interrupt
 #define FLOAT_POINT 2
@@ -43,6 +49,7 @@ const int arr_size = SCAN_TIME/DELAY_TIME;
 const int background_arr_size = 6;
 const float origin_x = 0.0, origin_y = 0.0, origin_z = 0;
 
+//circular queue/buffer initialization processes
 circular_queue R_background(background_arr_size, uINT16);
 circular_queue G_background(background_arr_size, uINT16);
 circular_queue B_background(background_arr_size, uINT16);
@@ -66,17 +73,17 @@ volatile bool isr_flag = false;
 void interruptRoutine();
 void handle_interrupt();
 
+//Sensor initialization function
+void enable_apds();
+
+//Read from sensor
+void read_RGB();
 
 //Serial Monitor Interface 
-void read_RGB();
 void print_RGB();
 float R_background_avg = 0.0, G_background_avg = 0.0, B_background_avg = 0.0;
 
-//scanning initialization
-bool scan_complete = false;
-
-void enable_apds();
-
+//ALL SIGNAL PROCESSING AND DECISION MAKING FUNCTIONS
 float calculate_std(float* arr, int size);
 bool RGB_consistent(float max_std);
 
@@ -98,8 +105,22 @@ void setup() {
   // Initialize interrupt service routine
   attachInterrupt(0, interruptRoutine, FALLING);
   
+  //enable all sensor functions
   enable_apds();
 }
+
+/*
+These are global variables that change their state constantly. 
+
+Depending on their state, the program will execute a different task. 
+
+These tasks include: 
+        - Data collection
+        - Analog signal processing
+        - Final decision making
+
+The program operates on the princicple of STATE MACHINES
+*/
 
 bool skipped_start = false;
 bool process_data = false;
@@ -111,29 +132,45 @@ int num_colors_prev = 0;
 
 void loop() {
 
+  //Will first read values from the sensor
   read_RGB();
+
+  /*
+  If the sensor detects a bright light, isr_flag will be set to true
+  else it will think that the collected sensor values are background. 
+  */
   if(!isr_flag) {
     queue_helper::collect_queue_data(R_background, red_light);
     queue_helper::collect_queue_data(G_background, green_light);
     queue_helper::collect_queue_data(B_background, blue_light);
 
+
+    /*
+    The program will use the average values of the background.
+    It will collect a few or several background values and take the average. 
+    The average of these background data will be treated as the background values. 
+    */
+
     R_background_avg = queue_helper::calculate_avg(R_background, background_arr_size);
     G_background_avg = queue_helper::calculate_avg(G_background, background_arr_size);
     B_background_avg = queue_helper::calculate_avg(B_background, background_arr_size);
-    //print_RGB();
   }
 
+  
+  //When the program enters this if statement, it means that it has detected a bright light
   else if(isr_flag) {
 
+    //interrupt is immidiately handled
     handle_interrupt();
     
+    //it will skip the start of the lighting pattern because it is different from the rest
     if(!skipped_start) {
         skipped_start = true;
         delay(1100);
         return;
     }
 
-    //collection state
+    //DATA COLLECTION STATE
     if(data_collected < arr_size) {
       queue_helper::collect_queue_data_float(collected_profile_R, red_light);
       queue_helper::collect_queue_data_float(collected_profile_G, green_light);
@@ -143,7 +180,7 @@ void loop() {
 
     } 
     
-    //preprocessing state
+    //SIGNAL PREPROCESSING STATE
     else if(data_collected == arr_size) {
       Serial.println("------RGB Array------");
 
@@ -175,7 +212,7 @@ void loop() {
         
       }
 
-      //transition to collection state
+      //TRANSITION TO DATA COLLECTION STATE
       data_collected = 0;
       num_colors_prev = num_colors;
       collected_profile_R.reset();
@@ -184,7 +221,7 @@ void loop() {
      
     }
     
-    //transition to processing state
+    //TRANSITION TO FINAL PROCESSING STATE
     if(pulse_avg_processed == SAMPLE_SIZE) {
       Serial.println("---Pulse Average---");
       pulse_avg_R.print_elements_float();
@@ -193,9 +230,9 @@ void loop() {
       process_data = true;
     }
     
-    //processing state
+    //FINAL PROCESSING STATE
     if(process_data) {
-      //disable apds
+    
       if((num_color_changes*1.0)/(SAMPLE_SIZE*1.0) >= 0.5) {
         Serial.print("Color is unreliable...");
         Serial.println(num_color_changes);
@@ -203,6 +240,8 @@ void loop() {
 
       if(RGB_consistent(30.0)) { 
         Serial.println("Test Ended...");
+
+        //TRANSITION TO DATA COLLECTION STATE
         process_data = false;
         pulse_avg_processed = 0;
         data_collected  = 0;
@@ -240,6 +279,7 @@ void handle_interrupt() {
   }
 }
 
+//Prints all current background RGB averages. Used for debugging
 void print_RGB() {
   Serial.print("RGB: ");
   Serial.print(R_background_avg);
@@ -269,6 +309,7 @@ void read_RGB() {
 
 }
 
+//standard deviation calculation. Used in Final Processing State
 float calculate_std(float* arr, int size) {
   float sum = 0.0;
   Serial.println("----RGB Distance----");
@@ -287,6 +328,8 @@ float calculate_std(float* arr, int size) {
   return sqrt(top/(size - 1)*1.0);
 }
 
+//higher level algorithm to detect the consistency of collected RGB sensor values
+//Used in Final Processing State
 bool RGB_consistent(float max_std) {
 
   float* arr = new float[SAMPLE_SIZE];
@@ -305,6 +348,13 @@ bool RGB_consistent(float max_std) {
   return true;
 }
 
+/*
+Intermediate preprocessing function. 
+This function filters out background RGB readings and takes the average value
+of all non-background RGB values. 
+
+In other words, this function looks at the "average" color of the collected RGB data
+*/
 bool process_pulse_avg() {
 
   float prev_R = collected_profile_R.get_index_float(0);
@@ -358,6 +408,13 @@ bool process_pulse_avg() {
     return true;
 }
 
+
+/*
+color detecting algorithm used in the preprocessing state. 
+This algorithm gives an integer representing the number of colors it has detected. 
+
+In terms of accuracy and speed performance of the program, THIS IS THE BOTTLENECK
+*/
 int differentiate_colors_preprocess(float deviation) {
 
   int count = 0;
