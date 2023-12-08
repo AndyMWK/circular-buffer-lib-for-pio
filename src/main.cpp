@@ -24,11 +24,8 @@ START OFF BY ADJUSTING THESE VALUES ONLY
 #define FLOAT_POINT 2
 #define uINT16 1
 #define DELAY_TIME 65 //most accurate combo is delay_time = 75ms and SCAN_TIME = 450
-#define SCANNING_POLL_RATE 50
-#define BCKGND_THRESH 180
 #define SCAN_TIME 325
 #define MAX_NUM_COLOR 2
-#define NUM_PROFILES 2
 #define SAMPLE_SIZE 3
 
 
@@ -89,6 +86,7 @@ bool RGB_consistent(float max_std);
 
 bool process_pulse_avg();
 int differentiate_colors_preprocess(float deviation);
+int find_dominant_num_of_color(int num_color_list[SAMPLE_SIZE], int count_color);
 
 void setup() {
   
@@ -129,6 +127,8 @@ int pulse_avg_processed = 0;
 int num_color_changes = 0;
 int num_colors = 0;
 int num_colors_prev = 0;
+
+int num_colors_list [SAMPLE_SIZE] = {};
 
 void loop() {
 
@@ -182,30 +182,32 @@ void loop() {
     
     //SIGNAL PREPROCESSING STATE
     else if(data_collected == arr_size) {
-      Serial.println("------RGB Array------");
+      // Serial.println("------RGB Array------");
 
-      collected_profile_R.print_elements_float();
-      collected_profile_G.print_elements_float();
-      collected_profile_B.print_elements_float();
+      // collected_profile_R.print_elements_float();
+      // collected_profile_G.print_elements_float();
+      // collected_profile_B.print_elements_float();
       
       //additional function for preprocessing the amount of different colors in the array
       num_colors = differentiate_colors_preprocess(23.5);
 
-      if(pulse_avg_processed == 0) {
-        num_colors_prev = num_colors;
-      } 
-      if(num_colors_prev != num_colors){
-        num_color_changes++;
-      }
+      // if(pulse_avg_processed == 0) {
+      //   num_colors_prev = num_colors;
+      // } 
+      // if(num_colors_prev != num_colors){
+      //   num_color_changes++;
+      // }
 
       if(num_colors == 1) {
-        Serial.println("Single Channel Lum");
+        // Serial.println("Single Channel Lum");
       } if(num_colors == 2) {
-        Serial.println("TW");
+        // Serial.println("TW");
       } else if(num_colors > 2){
-        Serial.print("detected colors are: ");
-        Serial.println(num_colors);
+        // Serial.print("detected colors are: ");
+        // Serial.println(num_colors);
       }
+
+      num_colors_list[pulse_avg_processed] = num_colors;
 
       if(process_pulse_avg()) {
         pulse_avg_processed++;
@@ -214,7 +216,7 @@ void loop() {
 
       //TRANSITION TO DATA COLLECTION STATE
       data_collected = 0;
-      num_colors_prev = num_colors;
+      // num_colors_prev = num_colors;
       collected_profile_R.reset();
       collected_profile_G.reset();
       collected_profile_B.reset();
@@ -223,40 +225,46 @@ void loop() {
     
     //TRANSITION TO FINAL PROCESSING STATE
     if(pulse_avg_processed == SAMPLE_SIZE) {
-      Serial.println("---Pulse Average---");
-      pulse_avg_R.print_elements_float();
-      pulse_avg_G.print_elements_float();
-      pulse_avg_B.print_elements_float();
+      // Serial.println("---Pulse Average---");
+      // pulse_avg_R.print_elements_float();
+      // pulse_avg_G.print_elements_float();
+      // pulse_avg_B.print_elements_float();
       process_data = true;
     }
     
     //FINAL PROCESSING STATE
     if(process_data) {
     
-      if((num_color_changes*1.0)/(SAMPLE_SIZE*1.0) >= 0.5) {
-        Serial.print("Color is unreliable...");
-        Serial.println(num_color_changes);
-      }
+      // if((num_color_changes*1.0)/(SAMPLE_SIZE*1.0) >= 0.5) {
+      //   Serial.print("Color is unreliable...");
+      //   Serial.println(num_color_changes);
+      // }
 
+      //ADD REDUNDANCY
       if(RGB_consistent(30.0)) { 
-        Serial.println("Test Ended...");
-
-        //TRANSITION TO DATA COLLECTION STATE
-        process_data = false;
-        pulse_avg_processed = 0;
-        data_collected  = 0;
-
-        pulse_avg_R.reset();
-        pulse_avg_G.reset();
-        pulse_avg_B.reset();
-
-        num_color_changes = 0;
-        num_colors_prev = 0;
-        num_colors = 0;
+        Serial.println("LPT PASSED");
       }
+      else {
+        Serial.println("LPT FAILED");
+      }
+
+      int num_colors_dominant = find_dominant_num_of_color(num_colors_list, 5);
+      Serial.print("Number of Colors are: ");
+      Serial.println(num_colors_dominant);
+      //TRANSITION TO DATA COLLECTION STATE
+      process_data = false;
+      pulse_avg_processed = 0;
+      data_collected  = 0;
+
+      pulse_avg_R.reset();
+      pulse_avg_G.reset();
+      pulse_avg_B.reset();
+
+      num_color_changes = 0;
+      num_colors_prev = 0;
+      num_colors = 0;
 
     }
-
     
   }
   delay(DELAY_TIME);
@@ -312,10 +320,10 @@ void read_RGB() {
 //standard deviation calculation. Used in Final Processing State
 float calculate_std(float* arr, int size) {
   float sum = 0.0;
-  Serial.println("----RGB Distance----");
+  // Serial.println("----RGB Distance----");
   for(int i = 0; i < size; i++) {
-    Serial.print("Avg dist: ");
-    Serial.println(arr[i]);
+    // Serial.print("Avg dist: ");
+    // Serial.println(arr[i]);
     sum += arr[i];
   }
   float avg = sum/(size*1.0);
@@ -341,8 +349,8 @@ bool RGB_consistent(float max_std) {
 
   float std = calculate_std(arr, SAMPLE_SIZE);
 
-  Serial.print("STD: ");
-  Serial.println(std);
+  // Serial.print("STD: ");
+  // Serial.println(std);
 
   delete[] arr;
   return true;
@@ -356,8 +364,6 @@ of all non-background RGB values.
 In other words, this function looks at the "average" color of the collected RGB data
 */
 bool process_pulse_avg() {
-
-  float prev_R = collected_profile_R.get_index_float(0);
       
   float total_sum_R = 0;
   float total_sum_G = 0;
@@ -366,36 +372,34 @@ bool process_pulse_avg() {
   int how_many_collected = 0;
 
   for(int i = 0; i < arr_size; i++) {
-
-          prev_R = collected_profile_R.get_index_float(i);
         
           if(queue_helper::is_within_percent_treshold(
-            collected_profile_R.get_index_float(i), R_background_avg, 120)) {
+            collected_profile_R.get_index_float(i), R_background_avg, 170)) {
           
             continue;
           }
 
-          if(queue_helper::is_within_percent_treshold(collected_profile_R.get_index_float(i), prev_R, 50.0)) {
+          //if(queue_helper::is_within_percent_treshold(collected_profile_R.get_index_float(i), prev_R, 50.0)) {
           
             total_sum_R += collected_profile_R.get_index_float(i);
             total_sum_G += collected_profile_G.get_index_float(i);
             total_sum_B += collected_profile_B.get_index_float(i);
 
             how_many_collected++;
-          }
+          //}
     }
 
-    Serial.println("----Collected Sum----");
-    Serial.print("R: ");
-    Serial.print(total_sum_R);
-    Serial.print("  G: ");
-    Serial.print(total_sum_G); 
-    Serial.print("  B: ");
-    Serial.println(total_sum_B);
+    // Serial.println("----Collected Sum----");
+    // Serial.print("R: ");
+    // Serial.print(total_sum_R);
+    // Serial.print("  G: ");
+    // Serial.print(total_sum_G); 
+    // Serial.print("  B: ");
+    // Serial.println(total_sum_B);
 
-    Serial.println("----# of collected data points----");
-    Serial.print("#: ");
-    Serial.println(how_many_collected);
+    // Serial.println("----# of collected data points----");
+    // Serial.print("#: ");
+    // Serial.println(how_many_collected);
 
     if(how_many_collected == 0) {
       return false;
@@ -427,7 +431,7 @@ int differentiate_colors_preprocess(float deviation) {
   int index = 0;
   for(int i = 0; i < arr_size; i++) {
     int value_frequency = 0;
-    if(queue_helper::is_within_percent_treshold(collected_profile_R.get_index_float(i), R_background_avg, 120)) {
+    if(queue_helper::is_within_percent_treshold(collected_profile_R.get_index_float(i), R_background_avg, 170)) {
           
             continue;
     }
@@ -441,7 +445,8 @@ int differentiate_colors_preprocess(float deviation) {
     if(value_frequency == 0) {
       arr[index] = collected_profile_R.get_index_float(i);
       count++;
-      index++;
+      index = (index + 1) % MAX_NUM_COLOR;
+      
     }
 
   }
@@ -450,6 +455,35 @@ int differentiate_colors_preprocess(float deviation) {
   return count;
 }
 
+
+//MAGIC NUMBER PRESENT
+int find_dominant_num_of_color(int num_color_list[SAMPLE_SIZE], int count_color) {
+  int counts[count_color] = {0};
+  for(int i = 0; i < SAMPLE_SIZE; i++) {
+    counts[num_color_list[i]]++;
+  }
+
+  int max_count = counts[0];
+  int max_count_index = 0;
+  for(int i = 0; i < count_color; i++) {
+    if(counts[i] > max_count) {
+      max_count_index = i;
+    }
+  }
+
+  int count_of_dominant_color = 0;
+  for(int i = 0; i < SAMPLE_SIZE; i++) {
+    if(num_color_list[i] == max_count_index) {
+      count_of_dominant_color++;
+    }
+  }
+
+  if((count_of_dominant_color*1.0 / SAMPLE_SIZE) >= 0.45) {
+    return max_count_index;
+  } else {
+    return -1;
+  }
+}
 void enable_apds() {
    // Initialize APDS-9960 (configure I2C and initial values)
    if (!apds.init()) {
