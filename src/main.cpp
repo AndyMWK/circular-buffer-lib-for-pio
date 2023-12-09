@@ -124,9 +124,9 @@ bool skipped_start = false;
 bool process_data = false;
 int data_collected = 0;
 int pulse_avg_processed = 0;
-int num_color_changes = 0;
 int num_colors = 0;
-int num_colors_prev = 0;
+bool re_checking = false;
+int re_checking_count = 0;
 
 int num_colors_list [SAMPLE_SIZE] = {};
 
@@ -198,14 +198,14 @@ void loop() {
       //   num_color_changes++;
       // }
 
-      if(num_colors == 1) {
-        // Serial.println("Single Channel Lum");
-      } if(num_colors == 2) {
-        // Serial.println("TW");
-      } else if(num_colors > 2){
-        // Serial.print("detected colors are: ");
-        // Serial.println(num_colors);
-      }
+      // if(num_colors == 1) {
+      //   // Serial.println("Single Channel Lum");
+      // } if(num_colors == 2) {
+      //   // Serial.println("TW");
+      // } else if(num_colors > 2){
+      //   // Serial.print("detected colors are: ");
+      //   // Serial.println(num_colors);
+      // }
 
       num_colors_list[pulse_avg_processed] = num_colors;
 
@@ -216,7 +216,6 @@ void loop() {
 
       //TRANSITION TO DATA COLLECTION STATE
       data_collected = 0;
-      // num_colors_prev = num_colors;
       collected_profile_R.reset();
       collected_profile_G.reset();
       collected_profile_B.reset();
@@ -234,13 +233,8 @@ void loop() {
     
     //FINAL PROCESSING STATE
     if(process_data) {
-    
-      // if((num_color_changes*1.0)/(SAMPLE_SIZE*1.0) >= 0.5) {
-      //   Serial.print("Color is unreliable...");
-      //   Serial.println(num_color_changes);
-      // }
 
-      //ADD REDUNDANCY
+      
       if(RGB_consistent(30.0)) { 
         Serial.println("LPT PASSED");
       }
@@ -249,8 +243,32 @@ void loop() {
       }
 
       int num_colors_dominant = find_dominant_num_of_color(num_colors_list, 5);
-      Serial.print("Number of Colors are: ");
+      
+      if(num_colors_dominant == -1 && !re_checking) {
+        Serial.println("Test Failed, re-checking...");
+        re_checking = true;
+      }
+
+      //REDUNDANCY MECHANISM
+      else if(re_checking) {
+
+        re_checking_count++;
+
+        if(num_colors_dominant == -1) {
+          re_checking = false;
+          re_checking_count = 0;
+          Serial.println("Re-checking complete. Bad");
+        }
+        else if(re_checking_count >= 1) {
+          re_checking = false;
+          re_checking_count = 0;
+          Serial.println("Re-checking complete. Good");
+        }
+      }
+      
+      //Serial.print("Number of Colors are: ");
       Serial.println(num_colors_dominant);
+
       //TRANSITION TO DATA COLLECTION STATE
       process_data = false;
       pulse_avg_processed = 0;
@@ -260,8 +278,6 @@ void loop() {
       pulse_avg_G.reset();
       pulse_avg_B.reset();
 
-      num_color_changes = 0;
-      num_colors_prev = 0;
       num_colors = 0;
 
     }
@@ -349,10 +365,15 @@ bool RGB_consistent(float max_std) {
 
   float std = calculate_std(arr, SAMPLE_SIZE);
 
+  delete[] arr;
+
+  if(std >= max_std) {
+    return false;
+  }
   // Serial.print("STD: ");
   // Serial.println(std);
 
-  delete[] arr;
+  
   return true;
 }
 
@@ -478,12 +499,14 @@ int find_dominant_num_of_color(int num_color_list[SAMPLE_SIZE], int count_color)
     }
   }
 
+  //MAGIC NUMBER
   if((count_of_dominant_color*1.0 / SAMPLE_SIZE) >= 0.45) {
     return max_count_index;
   } else {
     return -1;
   }
 }
+
 void enable_apds() {
    // Initialize APDS-9960 (configure I2C and initial values)
    if (!apds.init()) {
