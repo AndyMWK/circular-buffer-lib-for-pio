@@ -228,6 +228,12 @@ void loop() {
       // pulse_avg_R.print_elements_float();
       // pulse_avg_G.print_elements_float();
       // pulse_avg_B.print_elements_float();
+      // Serial.print("[ ");
+      // for(int i = 0; i < pulse_avg_processed; i++) {
+      //   Serial.print(num_colors_list[i]);
+      //   Serial.print(" ");
+      // }
+      // Serial.println(" ]");
       process_data = true;
     }
     
@@ -266,7 +272,7 @@ void loop() {
         }
       }
       
-      //Serial.print("Number of Colors are: ");
+      Serial.print("Number of Colors are: ");
       Serial.println(num_colors_dominant);
 
       //TRANSITION TO DATA COLLECTION STATE
@@ -483,12 +489,18 @@ int find_dominant_num_of_color(int num_color_list[SAMPLE_SIZE], int count_color)
   for(int i = 0; i < SAMPLE_SIZE; i++) {
     counts[num_color_list[i]]++;
   }
+  // Serial.println("Counts Array: ");
+  // for(int i = 0; i < count_color; i++) {
+  //   Serial.print(counts[i]);
+  //   Serial.print("  ");
+  // }
 
   int max_count = counts[0];
   int max_count_index = 0;
   for(int i = 0; i < count_color; i++) {
     if(counts[i] > max_count) {
       max_count_index = i;
+      max_count = counts[i];
     }
   }
 
@@ -500,6 +512,12 @@ int find_dominant_num_of_color(int num_color_list[SAMPLE_SIZE], int count_color)
   }
 
   //MAGIC NUMBER
+  // Serial.print("Max Count Index: ");
+  // Serial.println(max_count_index);
+  if(max_count_index > 2 || max_count_index < 1) {
+    return -1;
+  }
+  
   if((count_of_dominant_color*1.0 / SAMPLE_SIZE) >= 0.45) {
     return max_count_index;
   } else {
