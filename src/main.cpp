@@ -6,7 +6,7 @@
 #include <queue.h>
 #include "queue_helper.h"
 
-//includes Euclidian Color Space Functions for RGB
+//includes RGB Color Space Functions
 #include "RGB_vector.h"
 
 //Pins
@@ -23,7 +23,7 @@ START OFF BY ADJUSTING THESE VALUES ONLY
 #define LIGHT_INT_LOW   0   // Low light level for interrupt
 #define FLOAT_POINT 2
 #define uINT16 1
-#define DELAY_TIME 65 //most accurate combo is delay_time = 75ms and SCAN_TIME = 450
+#define DELAY_TIME 65
 #define SCAN_TIME 325
 #define MAX_NUM_COLOR 2
 #define SAMPLE_SIZE 3
@@ -114,7 +114,7 @@ Depending on their state, the program will execute a different task.
 
 These tasks include: 
         - Data collection
-        - Analog signal processing
+        - Data processing
         - Final decision making
 
 The program operates on the princicple of STATE MACHINES
@@ -182,6 +182,8 @@ void loop() {
     
     //SIGNAL PREPROCESSING STATE
     else if(data_collected == arr_size) {
+
+      //----------UNCOMMENT THE PRINT STATEMENTS BELOW FOR DEBUGGING------------
       // Serial.println("------RGB Array------");
 
       // collected_profile_R.print_elements_float();
@@ -191,13 +193,7 @@ void loop() {
       //additional function for preprocessing the amount of different colors in the array
       num_colors = differentiate_colors_preprocess(23.5);
 
-      // if(pulse_avg_processed == 0) {
-      //   num_colors_prev = num_colors;
-      // } 
-      // if(num_colors_prev != num_colors){
-      //   num_color_changes++;
-      // }
-
+      //----------UNCOMMENT THE PRINT STATEMENTS BELOW FOR DEBUGGING------------
       // if(num_colors == 1) {
       //   // Serial.println("Single Channel Lum");
       // } if(num_colors == 2) {
@@ -224,6 +220,9 @@ void loop() {
     
     //TRANSITION TO FINAL PROCESSING STATE
     if(pulse_avg_processed == SAMPLE_SIZE) {
+
+      //----------UNCOMMENT THE PRINT STATEMENTS BELOW FOR DEBUGGING------------
+
       // Serial.println("---Pulse Average---");
       // pulse_avg_R.print_elements_float();
       // pulse_avg_G.print_elements_float();
@@ -341,6 +340,9 @@ void read_RGB() {
 
 //standard deviation calculation. Used in Final Processing State
 float calculate_std(float* arr, int size) {
+
+  //----------UNCOMMENT THE PRINT STATEMENTS BELOW FOR DEBUGGING------------
+
   float sum = 0.0;
   // Serial.println("----RGB Distance----");
   for(int i = 0; i < size; i++) {
@@ -376,6 +378,9 @@ bool RGB_consistent(float max_std) {
   if(std >= max_std) {
     return false;
   }
+
+  //----------UNCOMMENT THE PRINT STATEMENTS BELOW FOR DEBUGGING------------
+
   // Serial.print("STD: ");
   // Serial.println(std);
 
@@ -405,16 +410,15 @@ bool process_pulse_avg() {
           
             continue;
           }
+          total_sum_R += collected_profile_R.get_index_float(i);
+          total_sum_G += collected_profile_G.get_index_float(i);
+          total_sum_B += collected_profile_B.get_index_float(i);
 
-          //if(queue_helper::is_within_percent_treshold(collected_profile_R.get_index_float(i), prev_R, 50.0)) {
-          
-            total_sum_R += collected_profile_R.get_index_float(i);
-            total_sum_G += collected_profile_G.get_index_float(i);
-            total_sum_B += collected_profile_B.get_index_float(i);
-
-            how_many_collected++;
-          //}
+          how_many_collected++;
+        
     }
+
+    //----------UNCOMMENT THE PRINT STATEMENTS BELOW FOR DEBUGGING------------
 
     // Serial.println("----Collected Sum----");
     // Serial.print("R: ");
@@ -489,6 +493,9 @@ int find_dominant_num_of_color(int num_color_list[SAMPLE_SIZE], int count_color)
   for(int i = 0; i < SAMPLE_SIZE; i++) {
     counts[num_color_list[i]]++;
   }
+
+  //----------UNCOMMENT THE PRINT STATEMENTS BELOW FOR DEBUGGING------------
+
   // Serial.println("Counts Array: ");
   // for(int i = 0; i < count_color; i++) {
   //   Serial.print(counts[i]);
@@ -511,9 +518,7 @@ int find_dominant_num_of_color(int num_color_list[SAMPLE_SIZE], int count_color)
     }
   }
 
-  //MAGIC NUMBER
-  // Serial.print("Max Count Index: ");
-  // Serial.println(max_count_index);
+  //MAGIC NUMBER -> 0.45
   if(max_count_index > 2 || max_count_index < 1) {
     return -1;
   }
