@@ -1,12 +1,7 @@
 #ifndef QUEUE_H
 #define QUEUE_H
 
-
-
-#include <Arduino.h>
-
-//circular buffer/queue implementation.
-//Note: use unsigned integer 16 bits because APDS-9960 sensor returns these category of numbers. 
+//circular buffer/queue implementation
 
 template<typename var>
 
