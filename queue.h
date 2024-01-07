@@ -2,6 +2,8 @@
 #define QUEUE_H
 
 //circular buffer/queue implementation
+#include <Arduino.h>
+
 
 template<typename var>
 
