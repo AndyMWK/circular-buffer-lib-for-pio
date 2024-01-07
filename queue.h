@@ -52,18 +52,21 @@ class circular_queue {
     bool is_empty();
     void dequeue();
 
+    //Get the front and rear of the queue
     var get_front();
     var get_rear();
 
+    //Get the value at a specific index
     var get_index(int index);
 
+    //Get size and the number of entries in the queue
     int get_size() const;
     int get_numEntry() const;
 
-    void print_elements_float();
-
+    //sets a value at a specific index to another value. Returns false if the operation was unsuccessful for some reason
     bool set(var value, int index);
 
+    //completely resest the queue. Replaces all values with zeros and resets the number of entry and size to zero
     void reset();
 };
 
