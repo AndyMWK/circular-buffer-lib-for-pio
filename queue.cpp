@@ -100,5 +100,7 @@ void circular_queue<var>::reset() {
     rear = 0, front = 0;
 }
 
+
+//make sure to pre-define all variable types that will be used in your main.cpp here!
 template class circular_queue<uint16_t>;
 template class circular_queue<float>;
