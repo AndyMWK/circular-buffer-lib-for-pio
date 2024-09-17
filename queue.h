@@ -20,7 +20,7 @@ class circular_queue {
     //integer or floating point queue delcarations. 
     //You can set them to either calculate only integers or floating points
 
-    var* queue;
+    int* queue;
     
     
 
