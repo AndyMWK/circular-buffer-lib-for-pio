@@ -2,8 +2,7 @@
 
 
 //prints all elements on the serial monitor. 
-template<typename var>
-void circular_queue<var>::print_elements() {
+void circular_queue::print_elements() {
     Serial.println("elements in the queue: ");
     for(int i = 0; i < size; i++) {
 
@@ -22,13 +21,11 @@ void circular_queue<var>::print_elements() {
 
 
 //function definitions for checking full queue and enqueuing. Use both functions for enqueue operations.
-template<typename var> 
-bool circular_queue<var>::is_full() {
+bool circular_queue::is_full() {
     return numEntries >= size;
 }
 
-template<typename var> 
-void circular_queue<var>::enqueue(var value) {
+void circular_queue::enqueue(var value) {
 
     queue[rear] = value;
     rear = (rear + 1) % size;
@@ -36,40 +33,33 @@ void circular_queue<var>::enqueue(var value) {
 }
 
 //function definitions for checking empty queue and dequeue. Use both functions for dequeue operation. 
-template<typename var> 
-bool circular_queue<var>::is_empty() {
+bool circular_queue::is_empty() {
     return numEntries <= 0;
 }
 
-template<typename var> 
-void circular_queue<var>::dequeue() {
+void circular_queue::dequeue() {
     front = (front + 1) % size;
     numEntries--;
 }
 
 //functions for retrieving front and rear values. Use for testing. 
-template<typename var> 
-var circular_queue<var>::get_front() {
+var circular_queue::get_front() {
     return *(queue + ((front + 1) % size));
 }
 
-template<typename var> 
-var circular_queue<var>::get_rear() {
+var circular_queue::get_rear() {
     return *(queue + (rear % size));
 }
 
-template<typename var> 
-int circular_queue<var>::get_size() const {
+int circular_queue::get_size() const {
     return size;
 }
-
-template<typename var> 
-int circular_queue<var>::get_numEntry() const {
+ 
+int circular_queue::get_numEntry() const {
     return numEntries;
 }
 
-template<typename var> 
-var circular_queue<var>::get_index(int index) {
+var circular_queue::get_index(int index) {
 
     if(index < 0 || index > size) {
         return -1;
@@ -78,9 +68,7 @@ var circular_queue<var>::get_index(int index) {
     return *(queue + index);
 }
 
-
-template<typename var> 
-bool circular_queue<var>::set(var value, int index) {
+bool circular_queue::set(var value, int index) {
     if(index < 0 || index >= size) {
         return false;
     }
@@ -90,8 +78,7 @@ bool circular_queue<var>::set(var value, int index) {
     return true;
 }
 
-template<typename var> 
-void circular_queue<var>::reset() {
+void circular_queue::reset() {
     for(int i = 0; i < size; i++) {
         queue[i] = 0;
     }
@@ -99,8 +86,3 @@ void circular_queue<var>::reset() {
     numEntries = 0;
     rear = 0, front = 0;
 }
-
-
-//make sure to pre-define all variable types that will be used in your main.cpp here!
-template class circular_queue<uint16_t>;
-template class circular_queue<float>;
