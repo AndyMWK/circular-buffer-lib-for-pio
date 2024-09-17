@@ -25,7 +25,7 @@ bool circular_queue::is_full() {
     return numEntries >= size;
 }
 
-void circular_queue::enqueue(var value) {
+void circular_queue::enqueue(int value) {
 
     queue[rear] = value;
     rear = (rear + 1) % size;
@@ -68,7 +68,7 @@ var circular_queue::get_index(int index) {
     return *(queue + index);
 }
 
-bool circular_queue::set(var value, int index) {
+bool circular_queue::set(int value, int index) {
     if(index < 0 || index >= size) {
         return false;
     }
