@@ -4,9 +4,6 @@
 //circular buffer/queue implementation
 #include <Arduino.h>
 
-
-template<typename var>
-
 class circular_queue {
     private: 
 
