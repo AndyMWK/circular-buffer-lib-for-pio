@@ -43,7 +43,7 @@ class circular_queue {
 
     //use for enqueue operation
     bool is_full();
-    void enqueue(var value);
+    void enqueue(int value);
 
     //use for dequeue operation. 
     bool is_empty();
@@ -61,7 +61,7 @@ class circular_queue {
     int get_numEntry() const;
 
     //sets a value at a specific index to another value. Returns false if the operation was unsuccessful for some reason
-    bool set(var value, int index);
+    bool set(int value, int index);
 
     //completely resest the queue. Replaces all values with zeros and resets the number of entry and size to zero
     void reset();
